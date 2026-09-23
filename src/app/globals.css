@@ -1,26 +1,117 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
+@layer base {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --wine-primary: #6E1E3A;
+    --wine-dark: #4D1227;
+    --wine-deep: #2B0715;
+    --gold-primary: #D4AF37;
+    --gold-light: #F3E5AB;
+    --gold-warm: #E5B869;
+    --night-bg: #090306;
+    --night-surface: #12060C;
+    --night-card: #170810;
+    --cream-light: #FAF5EF;
+    --cream-muted: #D1C5B8;
+  }
+
+  body {
+    background-color: var(--night-bg);
+    color: var(--cream-light);
+    font-family: var(--font-body), system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    overflow-x: hidden;
+    selection-background-color: var(--wine-primary);
+    selection-color: var(--gold-light);
+  }
+
+  ::selection {
+    background-color: #6E1E3A;
+    color: #F3E5AB;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #090306;
+}
+::-webkit-scrollbar-thumb {
+  background: #4D1227;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #6E1E3A;
+}
+
+/* Texture and ornamental patterns */
+.bg-grid-festive {
+  background-size: 40px 40px;
+  background-image: 
+    linear-gradient(to right, rgba(212, 175, 55, 0.03) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(212, 175, 55, 0.03) 1px, transparent 1px);
+}
+
+.bg-radial-vignette {
+  background: radial-gradient(circle at 50% 20%, rgba(110, 30, 58, 0.28) 0%, rgba(9, 3, 6, 0.85) 60%, #090306 100%);
+}
+
+.hero-responsive-background {
+  background-image: url('/pictures/Vibrant Dandiya Night Celebration.png');
+}
+
+@media (max-width: 639px) {
+  .hero-responsive-background {
+    background-image: url('/pictures/Golden Garba Dance Celebration.png');
+  }
+}
+
+.gold-gradient-text {
+  background: linear-gradient(135deg, #FFF1D0 0%, #E5B869 50%, #D4AF37 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.gold-gradient-border {
+  border-image: linear-gradient(135deg, rgba(212, 175, 55, 0.6), rgba(110, 30, 58, 0.2), rgba(212, 175, 55, 0.5)) 1;
+}
+
+.ticket-tear-left {
+  position: relative;
+}
+.ticket-tear-left::before {
+  content: "";
+  position: absolute;
+  left: -12px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background-color: #090306;
+}
+
+.ticket-tear-right {
+  position: relative;
+}
+.ticket-tear-right::after {
+  content: "";
+  position: absolute;
+  right: -12px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background-color: #090306;
+}
+
+/* Subtle gold glow */
+.gold-glow {
+  box-shadow: 0 0 25px -5px rgba(212, 175, 55, 0.25);
+}
+
+.wine-glow {
+  box-shadow: 0 0 35px -5px rgba(110, 30, 58, 0.4);
 }
