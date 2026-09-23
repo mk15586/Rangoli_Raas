@@ -166,11 +166,15 @@ export function BookingModal({ isOpen, onClose, initialQuantities }: BookingModa
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md overflow-y-auto animate-in fade-in duration-200">
-      <div className="relative w-full max-w-2xl bg-[#12050D] border-2 border-[#D4AF37]/50 rounded-2xl shadow-2xl my-6 overflow-hidden flex flex-col max-h-[92vh]">
-        
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/85 backdrop-blur-md overflow-hidden sm:overflow-y-auto animate-in fade-in duration-200">
+      <div className="relative w-full max-w-2xl bg-[#12050D] border-t sm:border-2 border-[#D4AF37]/50 rounded-t-[28px] sm:rounded-2xl shadow-2xl my-0 sm:my-6 overflow-hidden flex flex-col max-h-[90vh] sm:max-h-[92vh] animate-sheet-up">
+        {/* Mobile Pull / Drag Indicator */}
+        <div className="pt-3 pb-1 flex justify-center sm:hidden">
+          <span className="w-12 h-1 rounded-full bg-white/25" />
+        </div>
+
         {/* Modal Header */}
-        <div className="px-6 py-4 border-b border-[#D4AF37]/25 bg-[#170711] flex items-center justify-between shrink-0">
+        <div className="px-5 sm:px-6 py-3.5 sm:py-4 border-b border-[#D4AF37]/25 bg-[#170711] flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-full bg-[#6E1E3A] border border-[#D4AF37]/60 flex items-center justify-center text-[#F3E5AB]">
               <Sparkles className="w-4 h-4" />

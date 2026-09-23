@@ -1,21 +1,27 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   ArrowRight,
   CalendarDays,
   Camera,
+  Check,
   ChevronDown,
   ExternalLink,
   Mail,
   MapPin,
   Music,
   Phone,
+  RefreshCw,
   ShieldCheck,
   Soup,
+  Sparkles,
+  Ticket,
   User,
   Users,
+  X,
 } from 'lucide-react';
+import confetti from 'canvas-confetti';
 import { MobileStickyBar } from '@/components/layout/MobileStickyBar';
 import { TicketTierId } from '@/lib/types';
 
@@ -23,30 +29,42 @@ const layoutBackgroundImage = '/pictures/Elegant Garba Night Dandiya Background.
 const mapLink = 'https://maps.app.goo.gl/KmShKinUXKTfCWna7';
 const mapEmbedUrl = 'https://www.google.com/maps/embed?pb=!1m14!1m8!1m3!1d230273.7059166395!2d85.06993390722658!3d25.60403050707979!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x39ed59714de8ca13%3A0x6cc0f8ee032081ba!2sMaharashtra%20Mandal!5e0!3m2!1sen!2sin!4v1790167541716!5m2!1sen!2sin';
 
-const tickets = [
+interface TicketItem {
+  id: TicketTierId;
+  name: string;
+  price: number;
+  admitText: string;
+  benefits: string[];
+  popular?: boolean;
+}
+
+const tickets: TicketItem[] = [
   {
-    id: 'regular' as TicketTierId,
-    name: 'Regular',
+    id: 'regular',
+    name: 'Regular Pass',
     price: 299,
-    benefits: ['Event Entry', 'Access to dance arena'],
+    admitText: 'Admit 1',
+    benefits: ['Event Entry for 1 Person', 'Access to dance arena', 'Complimentary Dandiya sticks'],
   },
   {
-    id: 'family' as TicketTierId,
+    id: 'family',
     name: 'Family Pass',
     price: 999,
-    benefits: ['Entry for 5 people', 'Access to dance arena'],
+    admitText: 'Admit 5',
+    benefits: ['Entry for 5 people', 'Access to dance arena', 'Priority family entry gate'],
     popular: true,
   },
   {
-    id: 'couple' as TicketTierId,
+    id: 'couple',
     name: 'Couple Pass',
     price: 599,
-    benefits: ['Entry for 2 people', 'Access to dance arena'],
+    admitText: 'Admit 2',
+    benefits: ['Entry for 2 people', 'Access to dance arena', 'Express couple entrance'],
   },
 ];
 
 const highlights = [
-  { icon: Music, title: 'Live Music', copy: 'Top DJs & Artists' },
+  { icon: Music, title: 'Live DJ', copy: 'Top DJs & Artists' },
   { icon: SparkSticks, title: 'Festive Vibes', copy: 'Traditional Decor' },
   { icon: Soup, title: 'Delicious Food', copy: 'Variety of Stalls' },
   { icon: ShieldCheck, title: 'Safe & Secure', copy: 'Your Safety, Our Priority' },
@@ -82,15 +100,15 @@ function SparkSticks({ className = '' }: { className?: string }) {
 
 function BrandMark() {
   return (
-    <div className="flex items-center gap-3">
-      <div className="relative hidden h-12 w-11 shrink-0 sm:block">
-        <span className="absolute left-1 top-1 h-9 w-3 rotate-[-18deg] rounded-full bg-[#f4b55d] shadow-[0_0_14px_rgba(244,181,93,0.35)]" />
-        <span className="absolute right-2 top-2 h-9 w-3 rotate-[18deg] rounded-full bg-[#ce1d35] shadow-[0_0_14px_rgba(206,29,53,0.35)]" />
-        <span className="absolute left-0 top-8 h-4 w-4 rounded-full border border-[#f7ce75]" />
-        <span className="absolute right-0 top-8 h-4 w-4 rounded-full border border-[#f7ce75]" />
+    <div className="flex items-center gap-2.5 sm:gap-3">
+      <div className="relative h-9 w-8 sm:h-12 sm:w-11 shrink-0">
+        <span className="absolute left-0.5 top-0.5 h-7 w-2 sm:left-1 sm:top-1 sm:h-9 sm:w-3 rotate-[-18deg] rounded-full bg-[#f4b55d] shadow-[0_0_12px_rgba(244,181,93,0.35)]" />
+        <span className="absolute right-1 top-1 h-7 w-2 sm:right-2 sm:top-2 sm:h-9 sm:w-3 rotate-[18deg] rounded-full bg-[#ce1d35] shadow-[0_0_12px_rgba(206,29,53,0.35)]" />
+        <span className="absolute left-0 top-6 h-3 w-3 sm:top-8 sm:h-4 sm:w-4 rounded-full border border-[#f7ce75]" />
+        <span className="absolute right-0 top-6 h-3 w-3 sm:top-8 sm:h-4 sm:w-4 rounded-full border border-[#f7ce75]" />
       </div>
       <div>
-        <p className="font-serif text-[16px] font-semibold leading-none tracking-[0.08em] text-[#f7d88d] sm:text-[22px]">
+        <p className="font-serif text-[15px] font-bold leading-none tracking-[0.08em] text-[#f7d88d] sm:text-[22px]">
           RANGILO RAAS
         </p>
         <p className="mt-1 hidden text-[11px] font-semibold tracking-[0.16em] text-white/80 sm:block">
@@ -104,16 +122,69 @@ function BrandMark() {
 export default function Home() {
   const [selectedTicket, setSelectedTicket] = useState<TicketTierId>('regular');
   const [formQuantity, setFormQuantity] = useState(1);
+  const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [bookingSuccess, setBookingSuccess] = useState(false);
+
+  // Form inputs
+  const [customerName, setCustomerName] = useState('');
+  const [customerEmail, setCustomerEmail] = useState('');
+  const [customerPhone, setCustomerPhone] = useState('');
+
+  // Lock body scroll when mobile modal is open
+  useEffect(() => {
+    if (isBookingModalOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isBookingModalOpen]);
+
+  const activeTicketObj = tickets.find((t) => t.id === selectedTicket) || tickets[0];
+  const totalPrice = activeTicketObj.price * formQuantity;
+
+  const handleOpenBooking = (tierId?: TicketTierId) => {
+    if (tierId) {
+      setSelectedTicket(tierId);
+    }
+    setBookingSuccess(false);
+    setIsBookingModalOpen(true);
+  };
+
+  const handleFormSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsProcessing(true);
+
+    setTimeout(() => {
+      setIsProcessing(false);
+      setBookingSuccess(true);
+      try {
+        confetti({
+          particleCount: 75,
+          spread: 70,
+          origin: { y: 0.6 },
+          colors: ['#F4C45B', '#6E1E3A', '#FFE8A3', '#E85D04'],
+        });
+      } catch (err) {
+        console.error(err);
+      }
+    }, 1100);
+  };
 
   return (
     <div className="min-h-screen overflow-x-hidden bg-[#080303] text-[#fff8ed]">
-      <header className="fixed inset-x-0 top-0 z-50 border-b border-[#bb6a3d]/20 bg-[#0b0304]/82 shadow-[0_12px_36px_rgba(0,0,0,0.35)] backdrop-blur-xl">
-        <div className="mx-auto flex h-[78px] max-w-[1320px] items-center justify-between gap-3 px-4 sm:h-[86px] sm:px-8">
-          <a href="#" aria-label="Rangilo Raas home">
+      {/* 1. MOBILE & DESKTOP NAVBAR */}
+      <header className="fixed inset-x-0 top-0 z-50 border-b border-[#bb6a3d]/20 bg-[#0b0304]/88 shadow-[0_12px_36px_rgba(0,0,0,0.45)] backdrop-blur-xl transition-all duration-200">
+        <div className="mx-auto flex h-14 sm:h-[86px] max-w-[1320px] items-center justify-between gap-3 px-4 sm:px-8">
+          <a href="#" aria-label="Rangilo Raas home" className="focus:outline-none">
             <BrandMark />
           </a>
 
-          <nav className="hidden items-center gap-9 text-[15px] font-medium text-white/76 md:flex">
+          {/* Desktop Nav Links */}
+          <nav className="hidden items-center gap-9 text-[15px] font-medium text-white/76 md:flex" aria-label="Main navigation">
             {['Home', 'Event', 'Tickets'].map((item) => (
               <a
                 key={item}
@@ -127,43 +198,109 @@ export default function Home() {
             ))}
           </nav>
 
-          <a
-            href="#tickets"
-            className="rounded-xl bg-gradient-to-b from-[#ffe38f] to-[#efae4b] px-4 py-3 text-[13px] font-bold text-[#180908] shadow-[0_8px_26px_rgba(239,174,75,0.24)] transition hover:brightness-110 sm:px-6 sm:text-[15px]"
-          >
-            Book<span className="hidden sm:inline"> Tickets</span>
-          </a>
+          {/* Header Action Button */}
+          <div className="flex items-center gap-2">
+            {/* Mobile Mini Book Button */}
+            <button
+              type="button"
+              onClick={() => handleOpenBooking()}
+              className="sm:hidden rounded-full bg-gradient-to-r from-[#ffe38f] to-[#efae4b] px-3.5 py-1.5 text-xs font-bold text-[#180908] shadow-[0_4px_14px_rgba(239,174,75,0.28)] active:scale-95 transition-all flex items-center gap-1 cursor-pointer"
+            >
+              <Ticket className="w-3.5 h-3.5 text-[#6E1E3A]" />
+              <span>Book</span>
+            </button>
+
+            {/* Desktop Full Button */}
+            <a
+              href="#tickets"
+              className="hidden sm:inline-flex rounded-xl bg-gradient-to-b from-[#ffe38f] to-[#efae4b] px-6 py-3 text-[15px] font-bold text-[#180908] shadow-[0_8px_26px_rgba(239,174,75,0.24)] transition hover:brightness-110"
+            >
+              Book Tickets
+            </a>
+          </div>
         </div>
       </header>
 
       <main>
+        {/* 2. HERO SECTION */}
         <section
-          className="hero-responsive-background relative min-h-[560px] overflow-hidden border-b border-[#6b281f] bg-cover bg-center pt-[78px] sm:min-h-[710px] sm:pt-[86px]"
+          className="hero-responsive-background relative min-h-[92svh] sm:min-h-[100svh] overflow-hidden border-b border-[#6b281f] bg-cover bg-center pt-14 sm:pt-[86px]"
           style={{
             backgroundSize: 'cover',
             backgroundPosition: 'center top',
             backgroundRepeat: 'no-repeat',
           }}
         >
-          <div className="absolute inset-0 bg-[linear-gradient(90deg,#090203_0%,rgba(9,2,3,0.96)_18%,rgba(20,5,6,0.66)_43%,rgba(20,5,6,0.12)_74%,rgba(8,2,3,0.45)_100%)]" />
-          <div className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-[#090303] to-transparent" />
+          {/* Gradients: Mobile bottom-heavy wine overlay keeps text readable while showing dancers */}
+          <div className="absolute inset-0 bg-gradient-to-t from-[#090203] via-[#20050c]/80 to-black/35 sm:bg-[linear-gradient(90deg,#090203_0%,rgba(9,2,3,0.96)_18%,rgba(20,5,6,0.66)_43%,rgba(20,5,6,0.12)_74%,rgba(8,2,3,0.45)_100%)] pointer-events-none" />
+          <div className="absolute inset-x-0 bottom-0 h-32 sm:h-40 bg-gradient-to-t from-[#090303] to-transparent pointer-events-none" />
           <div className="pointer-events-none absolute left-0 top-24 h-72 w-72 rounded-full border border-[#9a3f28]/20 opacity-50" />
 
-          <div className="relative z-10 mx-auto flex min-h-[624px] max-w-[1320px] items-center px-5 py-12 sm:px-8">
-            <div className="max-w-[560px]">
-              <p className="mb-5 text-[17px] font-medium tracking-[0.34em] text-[#ffd98a]">
+          <div className="relative z-10 mx-auto flex min-h-[calc(92svh-56px)] sm:min-h-[calc(100svh-86px)] max-w-[1320px] items-center px-4 sm:px-8 py-8 sm:py-12">
+            <div className="w-full max-w-[580px]">
+              {/* Eyebrow */}
+              <p className="mb-2 sm:mb-5 text-[11px] sm:text-[17px] font-semibold tracking-[0.26em] sm:tracking-[0.34em] text-[#ffd98a] uppercase">
                 LET&apos;S RAAS TOGETHER
               </p>
-              <h1 className="font-serif text-[56px] font-black uppercase leading-[0.98] tracking-[0.02em] text-[#ffe19a] drop-shadow-[0_6px_24px_rgba(0,0,0,0.8)] sm:text-[92px]">
+
+              {/* Main Responsive Heading */}
+              <h1 className="font-serif text-[38px] xs:text-[44px] sm:text-[56px] lg:text-[92px] font-black uppercase leading-[1.04] sm:leading-[0.98] tracking-[0.02em] text-[#ffe19a] drop-shadow-[0_6px_24px_rgba(0,0,0,0.85)]">
                 RANGILO
-                <span className="block">RAAS</span>
+                <span className="block sm:inline lg:block sm:ml-3 lg:ml-0">RAAS</span>
               </h1>
-              <p className="mt-5 text-[28px] font-semibold text-white">Play. Dance. Celebrate.</p>
-              <p className="mt-4 max-w-[500px] text-[17px] leading-8 text-white/90">
+
+              {/* Subtitle & Description */}
+              <p className="mt-2.5 sm:mt-5 text-[19px] sm:text-[28px] font-semibold text-white tracking-wide">
+                Play. Dance. Celebrate.
+              </p>
+              <p className="mt-2 sm:mt-4 max-w-[500px] text-[13px] sm:text-[17px] leading-relaxed sm:leading-8 text-white/85">
                 Non-stop DJ beats, cultural programs and a vibrant evening of Raas for everyone.
               </p>
 
-              <div className="mt-8 grid max-w-[610px] gap-6 sm:grid-cols-2">
+              {/* Mobile Compact Glassmorphism Information Chips */}
+              <div className="mt-5 grid grid-cols-1 gap-2.5 sm:hidden">
+                <div className="flex items-center gap-3 rounded-xl bg-[#1d080e]/85 border border-[#F4C45B]/25 p-2.5 backdrop-blur-md shadow-sm">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#3A080D] text-[#F4C45B] border border-[#F4C45B]/30">
+                    <CalendarDays className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[13px] font-bold text-white">Saturday, 17 Oct 2026</p>
+                    <p className="text-[11px] text-white/70">Time to be announced</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 rounded-xl bg-[#1d080e]/85 border border-[#F4C45B]/25 p-2.5 backdrop-blur-md shadow-sm">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#3A080D] text-[#F4C45B] border border-[#F4C45B]/30">
+                    <MapPin className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[13px] font-bold text-white">Maharashtra Mandal</p>
+                    <p className="text-[11px] text-white/70">Patna, Bihar</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Mobile Action CTAs */}
+              <div className="mt-5 flex items-center gap-3 sm:hidden">
+                <button
+                  type="button"
+                  onClick={() => handleOpenBooking()}
+                  className="flex-1 rounded-xl bg-gradient-to-r from-[#ffe38f] via-[#f4c45b] to-[#efae4b] py-3.5 px-5 text-center text-[14px] font-bold uppercase tracking-wider text-[#180908] shadow-[0_8px_24px_rgba(239,174,75,0.3)] active:scale-[0.97] transition-all flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <Ticket className="w-4 h-4 text-[#6E1E3A]" />
+                  <span>Book Tickets</span>
+                </button>
+
+                <a
+                  href="#tickets"
+                  className="rounded-xl border border-white/20 bg-white/5 backdrop-blur-md py-3.5 px-4 text-center text-[13px] font-semibold text-white/90 hover:text-white active:scale-[0.97] transition-all"
+                >
+                  Explore Event
+                </a>
+              </div>
+
+              {/* Desktop Details Grid (Preserved) */}
+              <div className="mt-8 hidden sm:grid max-w-[610px] gap-6 sm:grid-cols-2">
                 <div className="flex items-center gap-4">
                   <div className="flex h-12 w-12 items-center justify-center rounded-md bg-[#26120e] text-[#f3a65d] ring-1 ring-[#f3a65d]/35">
                     <CalendarDays className="h-7 w-7" />
@@ -182,7 +319,37 @@ export default function Home() {
                 </div>
               </div>
 
-              <div className="mt-10 grid max-w-full grid-cols-2 gap-3 border-t border-[#8d3c2d]/24 pt-7 sm:max-w-[600px] sm:grid-cols-4 sm:gap-4">
+              {/* 3. EVENT HIGHLIGHTS: Mobile Horizontal Swipeable Cards */}
+              <div className="mt-7 sm:hidden">
+                <div className="flex items-center justify-between mb-2.5 px-0.5">
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#f4ce78]">
+                    Highlights
+                  </span>
+                  <span className="text-[10px] text-white/45">Swipe &rarr;</span>
+                </div>
+                <div className="flex gap-2.5 overflow-x-auto no-scrollbar snap-x snap-mandatory -mx-4 px-4 pb-1">
+                  {[
+                    { icon: Music, label: 'Live DJ', desc: 'Non-stop Garba beats' },
+                    { icon: Soup, label: 'Food Stalls', desc: 'Traditional delicacies' },
+                    { icon: Camera, label: 'Photo Booth', desc: 'Festive memories' },
+                    { icon: Users, label: 'Family Friendly', desc: 'Safe atmosphere' },
+                  ].map(({ icon: Icon, label, desc }) => (
+                    <div
+                      key={label}
+                      className="snap-start shrink-0 w-[142px] rounded-2xl bg-[#16060c]/85 border border-[#f4c45b]/20 p-3 backdrop-blur-md shadow-[0_6px_18px_rgba(0,0,0,0.35)]"
+                    >
+                      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#3a080d] text-[#f4ce78] border border-[#f4ce78]/25 mb-2">
+                        <Icon className="h-4 w-4" />
+                      </div>
+                      <p className="text-[13px] font-bold text-white leading-snug">{label}</p>
+                      <p className="text-[10px] text-white/65 mt-0.5 leading-tight">{desc}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Desktop Highlights Grid (Preserved) */}
+              <div className="mt-10 hidden sm:grid max-w-full grid-cols-2 gap-3 border-t border-[#8d3c2d]/24 pt-7 sm:max-w-[600px] sm:grid-cols-4 sm:gap-4">
                 {[
                   [Music, 'Live DJ'],
                   [Soup, 'Food Stalls'],
@@ -206,6 +373,7 @@ export default function Home() {
           </div>
         </section>
 
+        {/* 4. TICKET SECTION */}
         <div
           className="relative overflow-hidden"
           style={{
@@ -215,214 +383,546 @@ export default function Home() {
             backgroundRepeat: 'no-repeat',
           }}
         >
-          <section id="tickets" className="relative overflow-hidden border-b border-[#5b1c19] px-5 py-9 sm:px-8">
-          <div className="relative mx-auto grid max-w-[1320px] gap-8 lg:grid-cols-[1fr_430px]">
-            <div>
-              <h2 className="font-serif text-[28px] font-bold text-[#f4ce78] sm:text-[34px]">Choose Your Tickets</h2>
-              <p className="mt-1 text-[16px] text-white/83">Select your ticket type and get ready to dance!</p>
+          <section id="tickets" className="relative scroll-mt-16 sm:scroll-mt-[86px] overflow-hidden border-b border-[#5b1c19] px-4 sm:px-8 py-10 sm:py-14">
+            <div className="relative mx-auto grid max-w-[1320px] gap-8 lg:grid-cols-[1fr_430px]">
+              <div>
+                <div className="max-w-2xl">
+                  <span className="text-[11px] sm:text-xs uppercase font-bold tracking-[0.24em] text-[#f4ce78] block">
+                    Tickets & Passes
+                  </span>
+                  <h2 className="font-serif text-[26px] sm:text-[34px] font-bold text-[#f4ce78] mt-1">
+                    Choose Your Tickets
+                  </h2>
+                  <p className="mt-1 text-[14px] sm:text-[16px] text-white/80">
+                    Select your pass and get ready to dance.
+                  </p>
+                </div>
 
-              <div className="mt-12 grid gap-5 md:grid-cols-3">
-                {tickets.map((ticket) => (
-                  <article
-                    key={ticket.id}
-                    className={`relative flex min-h-[306px] flex-col rounded-lg border bg-[#130807]/82 p-7 text-center shadow-[0_18px_42px_rgba(0,0,0,0.28)] ${
-                      ticket.popular ? 'border-[#f3c266]' : 'border-[#7b3729]/55'
-                    }`}
-                  >
-                    {ticket.popular && (
-                      <span className="absolute left-1/2 top-0 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#f2c760] px-4 py-1.5 text-[12px] font-bold text-[#1a0806]">
-                        Most Popular
+                {/* Ticket Cards Grid */}
+                <div className="mt-6 sm:mt-10 grid gap-4 sm:gap-5 sm:grid-cols-2 md:grid-cols-3">
+                  {tickets.map((ticket) => (
+                    <article
+                      key={ticket.id}
+                      className={`relative flex flex-col justify-between rounded-[22px] border p-5 sm:p-7 shadow-[0_16px_40px_rgba(0,0,0,0.35)] transition-all duration-300 hover:border-[#f4ce78]/60 ${
+                        ticket.popular
+                          ? 'border-[#f4ce78]/80 bg-gradient-to-b from-[#240813]/95 via-[#16050d]/95 to-[#0e0207]/95 ring-1 ring-[#f4ce78]/40'
+                          : 'border-[#7b3729]/55 bg-gradient-to-b from-[#18060e]/90 to-[#0e0307]/90'
+                      }`}
+                    >
+                      {/* Integrated Popular Banner */}
+                      {ticket.popular && (
+                        <div className="mb-3 -mt-1 flex items-center justify-between rounded-xl bg-gradient-to-r from-[#f4c45b] to-[#e5a83b] px-3 py-1 text-[11px] font-bold text-[#140407] shadow-sm">
+                          <span className="flex items-center gap-1">
+                            <Sparkles className="w-3 h-3" /> Most Popular Choice
+                          </span>
+                          <span className="text-[10px] uppercase tracking-wider">{ticket.admitText}</span>
+                        </div>
+                      )}
+
+                      <div>
+                        <div className="flex items-baseline justify-between">
+                          <h3 className="text-[19px] sm:text-[20px] font-bold text-white tracking-wide">
+                            {ticket.name}
+                          </h3>
+                          {!ticket.popular && (
+                            <span className="text-[11px] text-[#f4ce78]/80 uppercase font-medium">
+                              {ticket.admitText}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="mt-2.5 flex items-baseline gap-1">
+                          <span className="font-serif text-[32px] sm:text-[36px] font-black text-[#f4ce78] tracking-tight">
+                            &#8377;{ticket.price}
+                          </span>
+                          <span className="text-[12px] text-white/55 font-normal">/ pass</span>
+                        </div>
+
+                        {/* Benefits Checklist with Gold Checks */}
+                        <ul className="mt-4 mb-6 space-y-2.5 text-left text-[13px] text-white/80">
+                          {ticket.benefits.map((benefit) => (
+                            <li key={benefit} className="flex items-center gap-2.5">
+                              <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[#3a080d] text-[#f4ce78] text-[10px] border border-[#f4ce78]/40">
+                                ✓
+                              </span>
+                              <span>{benefit}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+
+                      {/* Card CTA Button */}
+                      <button
+                        type="button"
+                        onClick={() => handleOpenBooking(ticket.id)}
+                        className={`w-full py-3 px-4 rounded-xl text-[13px] font-bold uppercase tracking-wider transition-all duration-200 active:scale-[0.97] flex items-center justify-center gap-2 cursor-pointer ${
+                          ticket.popular
+                            ? 'bg-gradient-to-r from-[#ffe38f] via-[#f4c45b] to-[#efae4b] text-[#180908] shadow-[0_6px_20px_rgba(239,174,75,0.25)] hover:brightness-105'
+                            : 'bg-[#2b0c16] text-[#ffd88d] border border-[#f4c45b]/35 hover:bg-[#3d1222]'
+                        }`}
+                      >
+                        <Ticket className="w-4 h-4" />
+                        <span>Book {ticket.name}</span>
+                      </button>
+                    </article>
+                  ))}
+                </div>
+              </div>
+
+              {/* Desktop Booking Sidebar (Preserved for Desktop, hidden on Mobile in favor of Bottom Sheet) */}
+              <aside className="hidden lg:block rounded-2xl border border-[#6e3327]/62 bg-[#160b08]/92 p-6 shadow-[0_24px_70px_rgba(0,0,0,0.45)]">
+                <h2 className="font-serif text-[28px] font-bold text-[#f4ce78]">Book Your Tickets</h2>
+                <form className="mt-5 space-y-4" onSubmit={handleFormSubmit}>
+                  <label className="flex items-center gap-4 rounded-xl bg-[#241611] px-4 py-3 text-white/85">
+                    <User className="h-5 w-5 shrink-0 text-[#ffd58a]" />
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[11px] text-white/50">Full Name</span>
+                      <input
+                        required
+                        value={customerName}
+                        onChange={(e) => setCustomerName(e.target.value)}
+                        className="w-full bg-transparent text-sm outline-none placeholder:text-white/60"
+                        placeholder="John Doe"
+                      />
+                    </span>
+                  </label>
+                  <label className="flex items-center gap-4 rounded-xl bg-[#241611] px-4 py-3 text-white/85">
+                    <Mail className="h-5 w-5 shrink-0 text-[#ffd58a]" />
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[11px] text-white/50">Email Address</span>
+                      <input
+                        required
+                        type="email"
+                        value={customerEmail}
+                        onChange={(e) => setCustomerEmail(e.target.value)}
+                        className="w-full bg-transparent text-sm outline-none placeholder:text-white/60"
+                        placeholder="john@example.com"
+                      />
+                    </span>
+                  </label>
+                  <label className="flex items-center gap-4 rounded-xl bg-[#241611] px-4 py-3 text-white/85">
+                    <Phone className="h-5 w-5 shrink-0 text-[#ffd58a]" />
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[11px] text-white/50">Mobile Number</span>
+                      <input
+                        required
+                        type="tel"
+                        value={customerPhone}
+                        onChange={(e) => setCustomerPhone(e.target.value)}
+                        className="w-full bg-transparent text-sm outline-none placeholder:text-white/60"
+                        placeholder="+91 98765 43210"
+                      />
+                    </span>
+                  </label>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <label>
+                      <span className="mb-2 block text-[13px] font-semibold text-white">Ticket Type</span>
+                      <span className="relative block">
+                        <select
+                          value={selectedTicket}
+                          onChange={(event) => setSelectedTicket(event.target.value as TicketTierId)}
+                          className="h-12 w-full appearance-none rounded-xl bg-[#241611] px-4 text-[14px] text-white outline-none ring-1 ring-transparent focus:ring-[#e9b35d]"
+                        >
+                          <option value="regular">Regular - &#8377;299</option>
+                          <option value="couple">Couple Pass - &#8377;599</option>
+                          <option value="family">Family Pass - &#8377;999</option>
+                        </select>
+                        <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#e9b35d]" />
                       </span>
+                    </label>
+                    <label>
+                      <span className="mb-2 block text-[13px] font-semibold text-white">Quantity</span>
+                      <span className="relative block">
+                        <select
+                          value={formQuantity}
+                          onChange={(event) => setFormQuantity(Number(event.target.value))}
+                          className="h-12 w-full appearance-none rounded-xl bg-[#241611] px-4 text-[14px] text-white outline-none ring-1 ring-transparent focus:ring-[#e9b35d]"
+                        >
+                          {[1, 2, 3, 4, 5, 6].map((quantity) => (
+                            <option key={quantity} value={quantity}>{quantity}</option>
+                          ))}
+                        </select>
+                        <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#e9b35d]" />
+                      </span>
+                    </label>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-[#1c0c08] border border-[#f4ce78]/20 flex justify-between items-center text-sm">
+                    <span className="text-white/70">Total Amount:</span>
+                    <span className="font-serif text-xl font-bold text-[#f4ce78]">&#8377;{totalPrice.toLocaleString('en-IN')}</span>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={isProcessing}
+                    className="mt-2 flex h-[54px] w-full items-center justify-center gap-3 rounded-xl bg-gradient-to-r from-[#c70d29] to-[#dc1f38] text-[16px] font-bold text-white shadow-[0_14px_28px_rgba(199,13,41,0.24)] transition hover:brightness-110 active:scale-[0.98] cursor-pointer"
+                  >
+                    {isProcessing ? (
+                      <>
+                        <RefreshCw className="w-5 h-5 animate-spin" />
+                        <span>Processing...</span>
+                      </>
+                    ) : (
+                      <>
+                        Proceed to Payment <ArrowRight className="h-5 w-5" />
+                      </>
                     )}
-                    <h3 className="mt-1 text-[19px] font-medium text-white">{ticket.name}</h3>
-                    <p className="mt-2 font-serif text-[31px] font-bold text-[#f4ce78]">&#8377;{ticket.price}</p>
-                    <ul className="mt-6 space-y-3 text-left text-[14px] text-white/77">
-                      {ticket.benefits.map((benefit) => (
-                        <li key={benefit} className="flex items-start gap-3">
-                          <span className="mt-0.5 text-[#f0a659]">✓</span>
-                          <span>{benefit}</span>
+                  </button>
+                  <div className="flex items-center justify-center gap-2 pt-2 text-[13px] text-white/68">
+                    <ShieldCheck className="h-4 w-4 text-[#ffbf68]" />
+                    <span>Secure payments powered by</span>
+                    <strong className="text-white">Razorpay</strong>
+                  </div>
+                </form>
+              </aside>
+            </div>
+          </section>
+
+          {/* Highlights Info Bar */}
+          <section id="event" className="px-4 sm:px-8 py-8 sm:py-10">
+            <div className="mx-auto grid max-w-[1180px] gap-6 sm:gap-7 sm:grid-cols-2 lg:grid-cols-4">
+              {highlights.map(({ icon: Icon, title, copy }) => (
+                <div key={title} className="flex items-center gap-4 rounded-xl bg-[#15060c]/60 sm:bg-transparent p-3 sm:p-0 border sm:border-0 border-[#f4ce78]/15">
+                  <Icon className="h-10 w-10 sm:h-11 sm:w-11 shrink-0 text-[#f4ce78]" />
+                  <div>
+                    <p className="text-[16px] sm:text-[17px] font-bold text-[#f4ce78]">{title}</p>
+                    <p className="mt-0.5 sm:mt-1 text-[13px] text-white/68">{copy}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          {/* Footer Section */}
+          <footer className="relative overflow-hidden border-t border-[#551a18] px-4 sm:px-8 py-8 sm:py-10">
+            <div className="relative mx-auto max-w-[1320px]">
+              <div className="relative mx-auto grid max-w-[1320px] gap-8 sm:gap-9 pb-10 lg:grid-cols-[1.1fr_0.9fr_1fr]">
+                {/* Venue */}
+                <section className="lg:border-r lg:border-[#6b3326]/68 lg:pr-9">
+                  <div className="flex items-center gap-3 sm:gap-4">
+                    <MapPin className="h-7 w-7 sm:h-8 sm:w-8 text-[#f0a659]" />
+                    <h2 className="font-serif text-[22px] sm:text-[24px] font-bold text-[#f4ce78]">Event Venue</h2>
+                  </div>
+                  <p className="mt-3 text-[15px] font-semibold text-white">Maharashtra Mandal</p>
+                  <p className="text-[14px] text-white/80">Patna, Bihar</p>
+                  <a
+                    href={mapLink}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-5 inline-flex items-center gap-2 rounded-xl border border-[#d49353]/70 px-4 py-2.5 text-[13px] sm:text-[14px] font-semibold text-white transition hover:bg-[#2a130e]"
+                  >
+                    View on Google Maps <ExternalLink className="h-4 w-4" />
+                  </a>
+                  <iframe
+                    className="mt-5 aspect-[1.95] w-full rounded-xl border-0 shadow-[0_24px_60px_rgba(0,0,0,0.45)]"
+                    src={mapEmbedUrl}
+                    title="Maharashtra Mandal location map"
+                    allowFullScreen
+                    loading="lazy"
+                    referrerPolicy="strict-origin-when-cross-origin"
+                  />
+                </section>
+
+                {/* Details */}
+                <section>
+                  <div className="flex items-center gap-3 sm:gap-4">
+                    <CalendarDays className="h-6 w-6 text-[#f0a659]" />
+                    <h2 className="font-serif text-[22px] sm:text-[24px] font-bold text-[#f4ce78]">Event Details</h2>
+                  </div>
+                  <div className="mt-6 space-y-4 sm:space-y-6">
+                    {details.map(([label, value]) => (
+                      <div key={label} className="grid grid-cols-[100px_1fr] sm:grid-cols-[110px_1fr] items-center gap-4 text-[13px] sm:text-[14px]">
+                        <span className="flex items-center gap-2.5 text-white/60">
+                          <span className="h-3.5 w-3.5 rounded-sm border border-[#f0a659]/70" />
+                          {label}
+                        </span>
+                        <span className="font-medium text-white">{value}</span>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+
+                {/* Notes */}
+                <section id="faqs" className="relative min-h-[300px] overflow-hidden rounded-2xl">
+                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_100%,rgba(140,35,26,0.26),transparent_34%)]" />
+                  <div className="relative z-10">
+                    <div className="flex items-center gap-3 sm:gap-4">
+                      <span className="flex h-6 w-6 items-center justify-center rounded-sm border border-[#f0a659] text-[#f0a659] text-xs font-bold">?</span>
+                      <h2 className="font-serif text-[22px] sm:text-[24px] font-bold text-[#f4ce78]">Important Notes</h2>
+                    </div>
+                    <ul className="mt-6 space-y-3.5 text-[13px] sm:text-[14px] leading-relaxed text-white/80">
+                      {notes.map((note) => (
+                        <li key={note} className="flex gap-3">
+                          <span className="text-[#f0a659]">✓</span>
+                          <span>{note}</span>
                         </li>
                       ))}
                     </ul>
-                  </article>
-                ))}
-              </div>
-            </div>
-
-            <aside className="rounded-[10px] border border-[#6e3327]/62 bg-[#160b08]/92 p-6 shadow-[0_24px_70px_rgba(0,0,0,0.45)]">
-              <h2 className="font-serif text-[29px] font-bold text-[#f4ce78]">Book Your Tickets</h2>
-              <form className="mt-5 space-y-4" onSubmit={(event) => { event.preventDefault(); window.location.hash = 'tickets'; }}>
-                <label className="flex items-center gap-4 rounded-md bg-[#241611] px-4 py-3 text-white/85">
-                  <User className="h-5 w-5 shrink-0 text-[#ffd58a]" />
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-[11px] text-white/50">Full Name</span>
-                    <input className="w-full bg-transparent text-sm outline-none placeholder:text-white/76" placeholder="John Doe" />
-                  </span>
-                </label>
-                <label className="flex items-center gap-4 rounded-md bg-[#241611] px-4 py-3 text-white/85">
-                  <Mail className="h-5 w-5 shrink-0 text-[#ffd58a]" />
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-[11px] text-white/50">Email Address</span>
-                    <input className="w-full bg-transparent text-sm outline-none placeholder:text-white/76" placeholder="john@example.com" type="email" />
-                  </span>
-                </label>
-                <label className="flex items-center gap-4 rounded-md bg-[#241611] px-4 py-3 text-white/85">
-                  <Phone className="h-5 w-5 shrink-0 text-[#ffd58a]" />
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-[11px] text-white/50">Mobile Number</span>
-                    <input className="w-full bg-transparent text-sm outline-none placeholder:text-white/76" placeholder="+91 98765 43210" type="tel" />
-                  </span>
-                </label>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <label>
-                    <span className="mb-2 block text-[13px] font-semibold text-white">Ticket Type</span>
-                    <span className="relative block">
-                      <select
-                        value={selectedTicket}
-                        onChange={(event) => setSelectedTicket(event.target.value as TicketTierId)}
-                        className="h-12 w-full appearance-none rounded-md bg-[#241611] px-4 text-[14px] text-white outline-none ring-1 ring-transparent focus:ring-[#e9b35d]"
-                      >
-                        <option value="regular">Select ticket type</option>
-                        <option value="regular">Regular</option>
-                        <option value="couple">Couple Pass</option>
-                        <option value="family">Family Pass</option>
-                      </select>
-                      <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#e9b35d]" />
-                    </span>
-                  </label>
-                  <label>
-                    <span className="mb-2 block text-[13px] font-semibold text-white">Quantity</span>
-                    <span className="relative block">
-                      <select
-                        value={formQuantity}
-                        onChange={(event) => setFormQuantity(Number(event.target.value))}
-                        className="h-12 w-full appearance-none rounded-md bg-[#241611] px-4 text-[14px] text-white outline-none ring-1 ring-transparent focus:ring-[#e9b35d]"
-                      >
-                        {[1, 2, 3, 4, 5, 6].map((quantity) => (
-                          <option key={quantity} value={quantity}>{quantity}</option>
-                        ))}
-                      </select>
-                      <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#e9b35d]" />
-                    </span>
-                  </label>
-                </div>
-
-                <button
-                  type="submit"
-                  className="mt-2 flex h-[58px] w-full items-center justify-center gap-3 rounded-lg bg-gradient-to-r from-[#c70d29] to-[#dc1f38] text-[16px] font-bold text-white shadow-[0_14px_28px_rgba(199,13,41,0.24)] transition hover:brightness-110"
-                >
-                  Proceed to Payment <ArrowRight className="h-5 w-5" />
-                </button>
-                <div className="flex items-center justify-center gap-2 pt-2 text-[13px] text-white/68">
-                  <span className="text-[#ffbf68]">▣</span>
-                  <span>Secure payments powered by</span>
-                  <strong className="text-white">Razorpay</strong>
-                </div>
-              </form>
-            </aside>
-          </div>
-        </section>
-
-        <section id="event" className="px-5 py-8 sm:px-8">
-          <div className="mx-auto grid max-w-[1180px] gap-7 sm:grid-cols-2 lg:grid-cols-4">
-            {highlights.map(({ icon: Icon, title, copy }) => (
-              <div key={title} className="flex items-center gap-5">
-                <Icon className="h-11 w-11 shrink-0 text-[#f4ce78]" />
-                <div>
-                  <p className="text-[17px] font-bold text-[#f4ce78]">{title}</p>
-                  <p className="mt-1 text-[13px] text-white/68">{copy}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-
-      <footer className="relative overflow-hidden border-t border-[#551a18] px-5 py-8 sm:px-8">
-        <div className="relative mx-auto max-w-[1320px]">
-          <div className="relative mx-auto grid max-w-[1320px] gap-9 pb-10 lg:grid-cols-[1.1fr_0.9fr_1fr]">
-            <section className="lg:border-r lg:border-[#6b3326]/68 lg:pr-9">
-              <div className="flex items-center gap-4">
-                <MapPin className="h-8 w-8 text-[#f0a659]" />
-                <h2 className="font-serif text-[24px] font-bold text-[#f4ce78]">Event Venue</h2>
-              </div>
-              <p className="mt-4 text-[15px] font-semibold">Maharashtra Mandal</p>
-              <p className="text-[14px] text-white/82">Patna, Bihar</p>
-              <a
-                href={mapLink}
-                target="_blank"
-                rel="noreferrer"
-                className="mt-6 inline-flex items-center gap-2 rounded-md border border-[#d49353]/70 px-4 py-3 text-[14px] font-semibold text-white transition hover:bg-[#2a130e]"
-              >
-                View on Google Maps <ExternalLink className="h-4 w-4" />
-              </a>
-              <iframe
-                className="mt-7 aspect-[1.95] w-full rounded-md border-0 shadow-[0_24px_60px_rgba(0,0,0,0.45)]"
-                src={mapEmbedUrl}
-                title="Maharashtra Mandal location map"
-                allowFullScreen
-                loading="lazy"
-                referrerPolicy="strict-origin-when-cross-origin"
-              />
-            </section>
-
-            <section>
-              <div className="flex items-center gap-4">
-                <CalendarDays className="h-6 w-6 text-[#f0a659]" />
-                <h2 className="font-serif text-[24px] font-bold text-[#f4ce78]">Event Details</h2>
-              </div>
-              <div className="mt-8 space-y-6">
-                {details.map(([label, value]) => (
-                  <div key={label} className="grid grid-cols-[110px_1fr] items-center gap-5 text-[14px]">
-                    <span className="flex items-center gap-3 text-white/62">
-                      <span className="h-4 w-4 rounded-sm border border-[#f0a659]/70" />
-                      {label}
-                    </span>
-                    <span className="font-medium text-white">{value}</span>
                   </div>
-                ))}
+                </section>
               </div>
-            </section>
 
-            <section id="faqs" className="relative min-h-[356px] overflow-hidden rounded-md">
-              <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_100%,rgba(140,35,26,0.26),transparent_34%)]" />
-              <div className="relative z-10">
-                <div className="flex items-center gap-4">
-                  <span className="flex h-6 w-6 items-center justify-center rounded-sm border border-[#f0a659] text-[#f0a659]">?</span>
-                  <h2 className="font-serif text-[24px] font-bold text-[#f4ce78]">Important Notes</h2>
+              {/* Footer Bottom */}
+              <div className="border-t border-[#551a18] pt-6 pb-20 sm:pb-6">
+                <div className="mx-auto flex max-w-[1320px] flex-col items-start justify-start gap-4 md:flex-row md:items-center md:gap-6">
+                  <BrandMark />
+                  <nav className="flex flex-wrap items-center justify-start gap-x-4 gap-y-3 text-[13px] text-white/70 md:ml-1">
+                    <a
+                      href="tel:+917557787551"
+                      className="inline-flex items-center rounded-xl border border-[#d49353]/70 px-4 py-2.5 font-semibold text-white transition hover:bg-[#2a130e] hover:text-[#ffd37e]"
+                    >
+                      Contact Us: +91 755 778 7551
+                    </a>
+                  </nav>
                 </div>
-                <ul className="mt-8 space-y-4 text-[14px] leading-6 text-white/82">
-                  {notes.map((note) => (
-                    <li key={note} className="flex gap-4">
-                      <span className="text-[#f0a659]">✓</span>
-                      <span>{note}</span>
-                    </li>
-                  ))}
-                </ul>
               </div>
-
-            </section>
-          </div>
-
-          <div className="border-t border-[#551a18] pt-8">
-            <div className="mx-auto flex max-w-[1320px] flex-col items-start justify-start gap-4 md:flex-row md:items-center md:gap-6">
-              <BrandMark />
-              <nav className="flex flex-wrap items-center justify-start gap-x-4 gap-y-3 text-[13px] text-white/70 md:ml-1">
-                <a
-                  href="tel:+917557787551"
-                  className="inline-flex items-center rounded-md border border-[#d49353]/70 px-4 py-2 font-semibold text-white transition hover:bg-[#2a130e] hover:text-[#ffd37e]"
-                >
-                  Contact Us: +91 755 778 7551
-                </a>
-              </nav>
             </div>
-          </div>
-        </div>
-      </footer>
+          </footer>
         </div>
       </main>
 
-      <MobileStickyBar />
+      {/* 5. SLEEK FLOATING MOBILE PURCHASE BAR */}
+      <MobileStickyBar onOpenBooking={() => handleOpenBooking()} />
+
+      {/* 10. MOBILE BOTTOM-SHEET BOOKING MODAL */}
+      {isBookingModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/85 backdrop-blur-md transition-opacity">
+          {/* Backdrop Click Dismiss */}
+          <div
+            className="absolute inset-0"
+            onClick={() => setIsBookingModalOpen(false)}
+            aria-hidden="true"
+          />
+
+          {/* Bottom Sheet Modal Container */}
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Ticket Checkout"
+            className="relative z-10 w-full max-w-lg rounded-t-[28px] sm:rounded-2xl bg-gradient-to-b from-[#1c0612] via-[#14040c] to-[#0d0207] border-t sm:border border-[#f4c45b]/40 shadow-2xl overflow-hidden flex flex-col max-h-[88vh] animate-sheet-up"
+          >
+            {/* Top Drag Indicator (Mobile) */}
+            <div className="pt-3 pb-1 flex justify-center sm:hidden">
+              <span className="w-12 h-1 rounded-full bg-white/25" />
+            </div>
+
+            {/* Modal Header */}
+            <div className="flex items-center justify-between px-5 py-3 border-b border-[#f4c45b]/20 bg-[#16040e]/80">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#3a080d] text-[#f4ce78] border border-[#f4ce78]/40">
+                  <Ticket className="h-4 w-4" />
+                </div>
+                <div>
+                  <h3 className="font-serif text-[16px] font-bold text-[#f4ce78]">
+                    {bookingSuccess ? 'Booking Confirmed!' : 'Book Passes'}
+                  </h3>
+                  <p className="text-[11px] text-white/60">
+                    Maharashtra Mandal • 17 Oct 2026
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setIsBookingModalOpen(false)}
+                className="p-1.5 rounded-full text-white/70 hover:text-white hover:bg-white/10 transition-colors"
+                aria-label="Close booking modal"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-5 overflow-y-auto space-y-4 flex-1">
+              {bookingSuccess ? (
+                /* Success View */
+                <div className="text-center py-6 space-y-4">
+                  <div className="w-16 h-16 rounded-full bg-[#205027] border-2 border-emerald-400 flex items-center justify-center mx-auto text-emerald-300">
+                    <Check className="w-8 h-8" />
+                  </div>
+                  <div>
+                    <h4 className="font-serif text-2xl font-bold text-[#f4ce78]">
+                      You&apos;re Going to Raas!
+                    </h4>
+                    <p className="text-sm text-white/80 mt-1">
+                      Your {activeTicketObj.name} ({formQuantity} pass{formQuantity > 1 ? 'es' : ''}) has been confirmed.
+                    </p>
+                  </div>
+                  <div className="p-4 rounded-xl bg-[#220713] border border-[#f4ce78]/30 text-left text-xs space-y-1.5">
+                    <p className="flex justify-between">
+                      <span className="text-white/60">Attendee:</span>
+                      <span className="font-bold text-white">{customerName || 'Aryan Patel'}</span>
+                    </p>
+                    <p className="flex justify-between">
+                      <span className="text-white/60">Amount Paid:</span>
+                      <span className="font-bold text-[#f4ce78]">&#8377;{totalPrice.toLocaleString('en-IN')}</span>
+                    </p>
+                    <p className="flex justify-between">
+                      <span className="text-white/60">Gate:</span>
+                      <span className="font-bold text-white">Main Dance Arena Gate</span>
+                    </p>
+                    <p className="text-[10px] text-emerald-400 pt-1">
+                      ✓ Digital QR ticket dispatched to {customerEmail || 'your email'}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsBookingModalOpen(false)}
+                    className="w-full py-3.5 rounded-xl bg-gradient-to-r from-[#ffe38f] via-[#f4c45b] to-[#efae4b] text-[14px] font-bold uppercase tracking-wider text-[#180908] shadow-lg"
+                  >
+                    Done
+                  </button>
+                </div>
+              ) : (
+                /* Booking Form */
+                <form onSubmit={handleFormSubmit} className="space-y-4">
+                  {/* Ticket Type Selector (Compact Segmented Pills) */}
+                  <div>
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-[#f4ce78] mb-1.5">
+                      Select Ticket Type
+                    </label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {tickets.map((t) => (
+                        <button
+                          key={t.id}
+                          type="button"
+                          onClick={() => setSelectedTicket(t.id)}
+                          className={`p-2 rounded-xl border text-center transition-all cursor-pointer ${
+                            selectedTicket === t.id
+                              ? 'bg-[#3a080d] border-[#f4ce78] shadow-md ring-1 ring-[#f4ce78]/50'
+                              : 'bg-[#18050e] border-[#f4ce78]/25 hover:border-[#f4ce78]/50'
+                          }`}
+                        >
+                          <p className="text-[11px] font-bold text-white truncate">{t.name}</p>
+                          <p className="text-[13px] font-serif font-black text-[#f4ce78] mt-0.5">
+                            &#8377;{t.price}
+                          </p>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Quantity Stepper (44px+ Touch Targets) */}
+                  <div className="flex items-center justify-between p-3 rounded-xl bg-[#1c0812] border border-[#f4ce78]/25">
+                    <div>
+                      <span className="text-xs font-bold text-white block">Number of Passes</span>
+                      <span className="text-[11px] text-white/60">
+                        &#8377;{activeTicketObj.price} &times; {formQuantity}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setFormQuantity(Math.max(1, formQuantity - 1))}
+                        disabled={formQuantity <= 1}
+                        className="h-11 w-11 rounded-xl bg-[#2a0b16] border border-[#f4ce78]/30 text-white text-lg font-bold flex items-center justify-center active:scale-95 disabled:opacity-30 cursor-pointer"
+                        aria-label="Decrease quantity"
+                      >
+                        -
+                      </button>
+                      <span className="w-8 text-center text-base font-bold text-white">
+                        {formQuantity}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setFormQuantity(Math.min(10, formQuantity + 1))}
+                        disabled={formQuantity >= 10}
+                        className="h-11 w-11 rounded-xl bg-[#2a0b16] border border-[#f4ce78]/30 text-white text-lg font-bold flex items-center justify-center active:scale-95 disabled:opacity-30 cursor-pointer"
+                        aria-label="Increase quantity"
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Customer Inputs */}
+                  <div className="space-y-2.5">
+                    <label className="block">
+                      <span className="block text-[11px] font-semibold text-white/80 mb-1">
+                        Full Name *
+                      </span>
+                      <input
+                        required
+                        type="text"
+                        value={customerName}
+                        onChange={(e) => setCustomerName(e.target.value)}
+                        placeholder="e.g. Aryan Patel"
+                        className="w-full h-11 px-3.5 rounded-xl bg-[#18050e] border border-[#f4ce78]/30 text-sm text-white placeholder:text-white/40 focus:outline-none focus:border-[#f4ce78] focus:ring-1 focus:ring-[#f4ce78]"
+                      />
+                    </label>
+
+                    <label className="block">
+                      <span className="block text-[11px] font-semibold text-white/80 mb-1">
+                        Email Address (For E-Ticket) *
+                      </span>
+                      <input
+                        required
+                        type="email"
+                        value={customerEmail}
+                        onChange={(e) => setCustomerEmail(e.target.value)}
+                        placeholder="e.g. aryan@example.com"
+                        className="w-full h-11 px-3.5 rounded-xl bg-[#18050e] border border-[#f4ce78]/30 text-sm text-white placeholder:text-white/40 focus:outline-none focus:border-[#f4ce78] focus:ring-1 focus:ring-[#f4ce78]"
+                      />
+                    </label>
+
+                    <label className="block">
+                      <span className="block text-[11px] font-semibold text-white/80 mb-1">
+                        Mobile Number (+91) *
+                      </span>
+                      <input
+                        required
+                        type="tel"
+                        value={customerPhone}
+                        onChange={(e) => setCustomerPhone(e.target.value)}
+                        placeholder="9876543210"
+                        className="w-full h-11 px-3.5 rounded-xl bg-[#18050e] border border-[#f4ce78]/30 text-sm text-white placeholder:text-white/40 focus:outline-none focus:border-[#f4ce78] focus:ring-1 focus:ring-[#f4ce78]"
+                      />
+                    </label>
+                  </div>
+
+                  {/* Total & Submit Button */}
+                  <div className="pt-2 border-t border-white/10 space-y-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+                    <div className="flex items-baseline justify-between">
+                      <span className="text-xs uppercase tracking-wider text-white/70 font-semibold">
+                        Total Payable:
+                      </span>
+                      <span className="font-serif text-2xl font-black text-[#f4ce78]">
+                        &#8377;{totalPrice.toLocaleString('en-IN')}
+                      </span>
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={isProcessing}
+                      className="w-full py-4 rounded-xl bg-gradient-to-r from-[#ffe38f] via-[#f4c45b] to-[#efae4b] text-[14px] font-bold uppercase tracking-wider text-[#180908] shadow-[0_6px_22px_rgba(239,174,75,0.35)] active:scale-[0.98] transition-all flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      {isProcessing ? (
+                        <>
+                          <RefreshCw className="w-4 h-4 animate-spin text-[#180908]" />
+                          <span>Connecting to Razorpay...</span>
+                        </>
+                      ) : (
+                        <>
+                          <span>Proceed to Payment</span>
+                          <ArrowRight className="w-4 h-4 text-[#180908]" />
+                        </>
+                      )}
+                    </button>
+
+                    <div className="flex items-center justify-center gap-1.5 text-[11px] text-white/60">
+                      <ShieldCheck className="w-3.5 h-3.5 text-[#f4ce78]" />
+                      <span>Secure payments powered by</span>
+                      <strong className="text-white font-semibold">Razorpay</strong>
+                    </div>
+                  </div>
+                </form>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
