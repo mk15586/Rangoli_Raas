@@ -2,12 +2,16 @@
 
 import React, { useState, useEffect } from 'react';
 import {
+  AlertCircle,
   ArrowRight,
   CalendarDays,
   Camera,
   Check,
+  CheckCircle2,
   ChevronDown,
+  Download,
   ExternalLink,
+  Lock,
   Mail,
   MapPin,
   Music,
@@ -24,6 +28,7 @@ import {
 import confetti from 'canvas-confetti';
 import { MobileStickyBar } from '@/components/layout/MobileStickyBar';
 import { TicketTierId } from '@/lib/types';
+import { validateEmail, validateName, validatePhone } from '@/lib/bookingValidation';
 
 const layoutBackgroundImage = '/pictures/Elegant Garba Night Dandiya Background.png';
 const mapLink = 'https://maps.app.goo.gl/KmShKinUXKTfCWna7';
@@ -44,7 +49,7 @@ const tickets: TicketItem[] = [
     name: 'Regular Pass',
     price: 299,
     admitText: 'Admit 1',
-    benefits: ['Event Entry for 1 Person', 'Access to dance arena', 'Complimentary Dandiya sticks'],
+    benefits: ['Event Entry for 1 Person', 'Access to dance arena', 'Verified Digital QR Entry'],
   },
   {
     id: 'family',
@@ -119,17 +124,65 @@ function BrandMark() {
   );
 }
 
+// Razorpay checkout script loader
+const loadRazorpayScript = (): Promise<boolean> => {
+  return new Promise((resolve) => {
+    if (typeof window !== 'undefined' && (window as any).Razorpay) {
+      resolve(true);
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+    script.async = true;
+    script.onload = () => resolve(true);
+    script.onerror = () => resolve(false);
+    document.body.appendChild(script);
+  });
+};
+
 export default function Home() {
   const [selectedTicket, setSelectedTicket] = useState<TicketTierId>('regular');
   const [formQuantity, setFormQuantity] = useState(1);
   const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
   const [bookingSuccess, setBookingSuccess] = useState(false);
 
   // Form inputs
   const [customerName, setCustomerName] = useState('');
   const [customerEmail, setCustomerEmail] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
+
+  // Validation state
+  const [errors, setErrors] = useState<{ name?: string; email?: string; phone?: string }>({});
+  const [touched, setTouched] = useState<{ name?: boolean; email?: boolean; phone?: boolean }>({});
+  const [paymentError, setPaymentError] = useState<string | null>(null);
+
+  // Confirmed ticket details from server
+  const [confirmedTicket, setConfirmedTicket] = useState<{
+    ticketId: string;
+    ticketToken: string;
+    qrCodeUrl: string;
+    verifyUrl: string;
+    customerName: string;
+    customerEmail: string;
+    customerPhone: string;
+    tierName: string;
+    quantity: number;
+    totalAttendees: number;
+    totalPaid: number;
+    orderId: string;
+    paymentId: string;
+    eventDate: string;
+    venue: string;
+    gateEntry: string;
+  } | null>(null);
+
+  const [emailDeliveryStatus, setEmailDeliveryStatus] = useState<{
+    success: boolean;
+    message?: string;
+    error?: string;
+  } | null>(null);
 
   // Lock body scroll when mobile modal is open
   useEffect(() => {
@@ -151,27 +204,163 @@ export default function Home() {
       setSelectedTicket(tierId);
     }
     setBookingSuccess(false);
+    setPaymentError(null);
     setIsBookingModalOpen(true);
   };
 
-  const handleFormSubmit = (e: React.FormEvent) => {
+  const handleNameChange = (val: string) => {
+    setCustomerName(val);
+    if (touched.name) {
+      setErrors((prev) => ({ ...prev, name: validateName(val) }));
+    }
+  };
+
+  const handleEmailChange = (val: string) => {
+    setCustomerEmail(val);
+    if (touched.email) {
+      setErrors((prev) => ({ ...prev, email: validateEmail(val) }));
+    }
+  };
+
+  const handlePhoneChange = (val: string) => {
+    setCustomerPhone(val);
+    if (touched.phone) {
+      setErrors((prev) => ({ ...prev, phone: validatePhone(val) }));
+    }
+  };
+
+  const handleBlur = (field: 'name' | 'email' | 'phone') => {
+    setTouched((prev) => ({ ...prev, [field]: true }));
+    if (field === 'name') setErrors((prev) => ({ ...prev, name: validateName(customerName) }));
+    if (field === 'email') setErrors((prev) => ({ ...prev, email: validateEmail(customerEmail) }));
+    if (field === 'phone') setErrors((prev) => ({ ...prev, phone: validatePhone(customerPhone) }));
+  };
+
+  const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    const nameErr = validateName(customerName);
+    const emailErr = validateEmail(customerEmail);
+    const phoneErr = validatePhone(customerPhone);
+
+    setErrors({ name: nameErr, email: emailErr, phone: phoneErr });
+    setTouched({ name: true, email: true, phone: true });
+
+    if (nameErr || emailErr || phoneErr) {
+      return;
+    }
+
+    setPaymentError(null);
     setIsProcessing(true);
 
-    setTimeout(() => {
-      setIsProcessing(false);
-      setBookingSuccess(true);
-      try {
-        confetti({
-          particleCount: 75,
-          spread: 70,
-          origin: { y: 0.6 },
-          colors: ['#F4C45B', '#6E1E3A', '#FFE8A3', '#E85D04'],
-        });
-      } catch (err) {
-        console.error(err);
+    try {
+      const isLoaded = await loadRazorpayScript();
+      if (!isLoaded) {
+        setPaymentError('Could not load Razorpay SDK. Please check your internet connection.');
+        setIsProcessing(false);
+        return;
       }
-    }, 1100);
+
+      // 1. Create order on backend API
+      const orderRes = await fetch('/api/razorpay/create-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tierId: selectedTicket,
+          quantity: formQuantity,
+          customerName: customerName.trim(),
+          customerEmail: customerEmail.trim(),
+          customerPhone: customerPhone.trim(),
+        }),
+      });
+
+      const orderData = await orderRes.json();
+      if (!orderRes.ok || !orderData.orderId) {
+        setPaymentError(orderData.error || 'Failed to initialize payment gateway.');
+        setIsProcessing(false);
+        return;
+      }
+
+      // 2. Open Razorpay test checkout window
+      const options = {
+        key: orderData.key,
+        amount: orderData.amount,
+        currency: orderData.currency || 'INR',
+        name: 'Rangilo Raas 2026',
+        description: `${activeTicketObj.name} (${formQuantity} Pass${formQuantity > 1 ? 'es' : ''})`,
+        image: '/favicon.ico',
+        order_id: orderData.orderId,
+        prefill: {
+          name: customerName.trim(),
+          email: customerEmail.trim(),
+          contact: customerPhone.trim(),
+        },
+        theme: {
+          color: '#6E1E3A', // Primary deep wine red
+        },
+        handler: async function (response: any) {
+          setIsBookingModalOpen(true);
+          setIsVerifying(true);
+          try {
+            const verifyRes = await fetch('/api/razorpay/verify-payment', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature,
+                tierId: selectedTicket,
+                quantity: formQuantity,
+                customerName: customerName.trim(),
+                customerEmail: customerEmail.trim(),
+                customerPhone: customerPhone.trim(),
+              }),
+            });
+
+            const verifyData = await verifyRes.json();
+            if (verifyRes.ok && verifyData.success) {
+              setConfirmedTicket(verifyData.ticket);
+              setEmailDeliveryStatus(verifyData.emailDelivery);
+              setBookingSuccess(true);
+              try {
+                confetti({
+                  particleCount: 90,
+                  spread: 75,
+                  origin: { y: 0.6 },
+                  colors: ['#F4C45B', '#6E1E3A', '#FFE8A3', '#E85D04'],
+                });
+              } catch (err) {
+                console.error(err);
+              }
+            } else {
+              setPaymentError(verifyData.error || 'Payment signature verification failed.');
+            }
+          } catch (vErr: any) {
+            console.error('Verification error:', vErr);
+            setPaymentError('Network error while verifying payment.');
+          } finally {
+            setIsProcessing(false);
+            setIsVerifying(false);
+          }
+        },
+        modal: {
+          ondismiss: function () {
+            setIsProcessing(false);
+          },
+        },
+      };
+
+      const rzp = new (window as any).Razorpay(options);
+      rzp.on('payment.failed', function (response: any) {
+        setPaymentError(response.error?.description || 'Payment was declined or cancelled.');
+        setIsProcessing(false);
+      });
+      rzp.open();
+    } catch (err: any) {
+      console.error('Payment checkout error:', err);
+      setPaymentError(err?.message || 'Payment initiation failed.');
+      setIsProcessing(false);
+    }
   };
 
   return (
@@ -472,48 +661,110 @@ export default function Home() {
               {/* Desktop Booking Sidebar (Preserved for Desktop, hidden on Mobile in favor of Bottom Sheet) */}
               <aside className="hidden lg:block rounded-2xl border border-[#6e3327]/62 bg-[#160b08]/92 p-6 shadow-[0_24px_70px_rgba(0,0,0,0.45)]">
                 <h2 className="font-serif text-[28px] font-bold text-[#f4ce78]">Book Your Tickets</h2>
-                <form className="mt-5 space-y-4" onSubmit={handleFormSubmit}>
-                  <label className="flex items-center gap-4 rounded-xl bg-[#241611] px-4 py-3 text-white/85">
-                    <User className="h-5 w-5 shrink-0 text-[#ffd58a]" />
-                    <span className="min-w-0 flex-1">
-                      <span className="block text-[11px] text-white/50">Full Name</span>
-                      <input
-                        required
-                        value={customerName}
-                        onChange={(e) => setCustomerName(e.target.value)}
-                        className="w-full bg-transparent text-sm outline-none placeholder:text-white/60"
-                        placeholder="John Doe"
-                      />
-                    </span>
-                  </label>
-                  <label className="flex items-center gap-4 rounded-xl bg-[#241611] px-4 py-3 text-white/85">
-                    <Mail className="h-5 w-5 shrink-0 text-[#ffd58a]" />
-                    <span className="min-w-0 flex-1">
-                      <span className="block text-[11px] text-white/50">Email Address</span>
-                      <input
-                        required
-                        type="email"
-                        value={customerEmail}
-                        onChange={(e) => setCustomerEmail(e.target.value)}
-                        className="w-full bg-transparent text-sm outline-none placeholder:text-white/60"
-                        placeholder="john@example.com"
-                      />
-                    </span>
-                  </label>
-                  <label className="flex items-center gap-4 rounded-xl bg-[#241611] px-4 py-3 text-white/85">
-                    <Phone className="h-5 w-5 shrink-0 text-[#ffd58a]" />
-                    <span className="min-w-0 flex-1">
-                      <span className="block text-[11px] text-white/50">Mobile Number</span>
-                      <input
-                        required
-                        type="tel"
-                        value={customerPhone}
-                        onChange={(e) => setCustomerPhone(e.target.value)}
-                        className="w-full bg-transparent text-sm outline-none placeholder:text-white/60"
-                        placeholder="+91 98765 43210"
-                      />
-                    </span>
-                  </label>
+
+                {paymentError && (
+                  <div className="mt-4 p-3 rounded-xl bg-rose-950/80 border border-rose-500/50 text-xs text-rose-200 flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                    <span>{paymentError}</span>
+                  </div>
+                )}
+
+                <form className="mt-5 space-y-4" onSubmit={handleFormSubmit} noValidate>
+                  {/* Full Name */}
+                  <div>
+                    <label className={`flex items-center gap-4 rounded-xl bg-[#241611] px-4 py-3 text-white/85 transition-colors ${
+                      touched.name && errors.name
+                        ? 'border border-rose-500/80 ring-1 ring-rose-500/40 bg-rose-950/20'
+                        : touched.name && !errors.name
+                        ? 'border border-emerald-500/60 ring-1 ring-emerald-500/30'
+                        : 'border border-transparent'
+                    }`}>
+                      <User className={`h-5 w-5 shrink-0 ${touched.name && errors.name ? 'text-rose-400' : 'text-[#ffd58a]'}`} />
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-[11px] text-white/50">Full Name *</span>
+                        <input
+                          type="text"
+                          value={customerName}
+                          onChange={(e) => handleNameChange(e.target.value)}
+                          onBlur={() => handleBlur('name')}
+                          className="w-full bg-transparent text-sm outline-none placeholder:text-white/40"
+                          placeholder="e.g. Aryan Patel"
+                        />
+                      </span>
+                      {touched.name && !errors.name && (
+                        <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                      )}
+                    </label>
+                    {touched.name && errors.name && (
+                      <p className="mt-1 flex items-center gap-1 text-[11px] text-rose-400 pl-1">
+                        <AlertCircle className="w-3 h-3 shrink-0" /> {errors.name}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Email Address */}
+                  <div>
+                    <label className={`flex items-center gap-4 rounded-xl bg-[#241611] px-4 py-3 text-white/85 transition-colors ${
+                      touched.email && errors.email
+                        ? 'border border-rose-500/80 ring-1 ring-rose-500/40 bg-rose-950/20'
+                        : touched.email && !errors.email
+                        ? 'border border-emerald-500/60 ring-1 ring-emerald-500/30'
+                        : 'border border-transparent'
+                    }`}>
+                      <Mail className={`h-5 w-5 shrink-0 ${touched.email && errors.email ? 'text-rose-400' : 'text-[#ffd58a]'}`} />
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-[11px] text-white/50">Email Address (For E-Ticket) *</span>
+                        <input
+                          type="email"
+                          value={customerEmail}
+                          onChange={(e) => handleEmailChange(e.target.value)}
+                          onBlur={() => handleBlur('email')}
+                          className="w-full bg-transparent text-sm outline-none placeholder:text-white/40"
+                          placeholder="e.g. aryan@example.com"
+                        />
+                      </span>
+                      {touched.email && !errors.email && (
+                        <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                      )}
+                    </label>
+                    {touched.email && errors.email && (
+                      <p className="mt-1 flex items-center gap-1 text-[11px] text-rose-400 pl-1">
+                        <AlertCircle className="w-3 h-3 shrink-0" /> {errors.email}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Mobile Number */}
+                  <div>
+                    <label className={`flex items-center gap-4 rounded-xl bg-[#241611] px-4 py-3 text-white/85 transition-colors ${
+                      touched.phone && errors.phone
+                        ? 'border border-rose-500/80 ring-1 ring-rose-500/40 bg-rose-950/20'
+                        : touched.phone && !errors.phone
+                        ? 'border border-emerald-500/60 ring-1 ring-emerald-500/30'
+                        : 'border border-transparent'
+                    }`}>
+                      <Phone className={`h-5 w-5 shrink-0 ${touched.phone && errors.phone ? 'text-rose-400' : 'text-[#ffd58a]'}`} />
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-[11px] text-white/50">Mobile Number (10 Digits) *</span>
+                        <input
+                          type="tel"
+                          value={customerPhone}
+                          onChange={(e) => handlePhoneChange(e.target.value)}
+                          onBlur={() => handleBlur('phone')}
+                          className="w-full bg-transparent text-sm outline-none placeholder:text-white/40"
+                          placeholder="9876543210"
+                        />
+                      </span>
+                      {touched.phone && !errors.phone && (
+                        <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                      )}
+                    </label>
+                    {touched.phone && errors.phone && (
+                      <p className="mt-1 flex items-center gap-1 text-[11px] text-rose-400 pl-1">
+                        <AlertCircle className="w-3 h-3 shrink-0" /> {errors.phone}
+                      </p>
+                    )}
+                  </div>
 
                   <div className="grid grid-cols-2 gap-3">
                     <label>
@@ -522,7 +773,7 @@ export default function Home() {
                         <select
                           value={selectedTicket}
                           onChange={(event) => setSelectedTicket(event.target.value as TicketTierId)}
-                          className="h-12 w-full appearance-none rounded-xl bg-[#241611] px-4 text-[14px] text-white outline-none ring-1 ring-transparent focus:ring-[#e9b35d]"
+                          className="h-12 w-full appearance-none rounded-xl bg-[#241611] px-4 text-[14px] text-white outline-none ring-1 ring-transparent focus:ring-[#e9b35d] cursor-pointer"
                         >
                           <option value="regular">Regular - &#8377;299</option>
                           <option value="couple">Couple Pass - &#8377;599</option>
@@ -537,7 +788,7 @@ export default function Home() {
                         <select
                           value={formQuantity}
                           onChange={(event) => setFormQuantity(Number(event.target.value))}
-                          className="h-12 w-full appearance-none rounded-xl bg-[#241611] px-4 text-[14px] text-white outline-none ring-1 ring-transparent focus:ring-[#e9b35d]"
+                          className="h-12 w-full appearance-none rounded-xl bg-[#241611] px-4 text-[14px] text-white outline-none ring-1 ring-transparent focus:ring-[#e9b35d] cursor-pointer"
                         >
                           {[1, 2, 3, 4, 5, 6].map((quantity) => (
                             <option key={quantity} value={quantity}>{quantity}</option>
@@ -556,12 +807,12 @@ export default function Home() {
                   <button
                     type="submit"
                     disabled={isProcessing}
-                    className="mt-2 flex h-[54px] w-full items-center justify-center gap-3 rounded-xl bg-gradient-to-r from-[#c70d29] to-[#dc1f38] text-[16px] font-bold text-white shadow-[0_14px_28px_rgba(199,13,41,0.24)] transition hover:brightness-110 active:scale-[0.98] cursor-pointer"
+                    className="mt-2 flex h-[54px] w-full items-center justify-center gap-3 rounded-xl bg-gradient-to-r from-[#c70d29] to-[#dc1f38] text-[16px] font-bold text-white shadow-[0_14px_28px_rgba(199,13,41,0.24)] transition hover:brightness-110 active:scale-[0.98] cursor-pointer disabled:opacity-70"
                   >
                     {isProcessing ? (
                       <>
                         <RefreshCw className="w-5 h-5 animate-spin" />
-                        <span>Processing...</span>
+                        <span>Initializing Razorpay...</span>
                       </>
                     ) : (
                       <>
@@ -571,7 +822,7 @@ export default function Home() {
                   </button>
                   <div className="flex items-center justify-center gap-2 pt-2 text-[13px] text-white/68">
                     <ShieldCheck className="h-4 w-4 text-[#ffbf68]" />
-                    <span>Secure payments powered by</span>
+                    <span>Secure test payment powered by</span>
                     <strong className="text-white">Razorpay</strong>
                   </div>
                 </form>
@@ -735,48 +986,132 @@ export default function Home() {
 
             {/* Modal Body */}
             <div className="p-5 overflow-y-auto space-y-4 flex-1">
-              {bookingSuccess ? (
-                /* Success View */
-                <div className="text-center py-6 space-y-4">
-                  <div className="w-16 h-16 rounded-full bg-[#205027] border-2 border-emerald-400 flex items-center justify-center mx-auto text-emerald-300">
+              {bookingSuccess && confirmedTicket ? (
+                /* Success View with Encrypted QR Pass & Gmail Status */
+                <div className="text-center py-4 space-y-4">
+                  <div className="w-16 h-16 rounded-full bg-emerald-950 border-2 border-emerald-400 flex items-center justify-center mx-auto text-emerald-400 shadow-[0_0_20px_rgba(52,211,153,0.3)] animate-bounce-short">
                     <Check className="w-8 h-8" />
                   </div>
+
                   <div>
-                    <h4 className="font-serif text-2xl font-bold text-[#f4ce78]">
-                      You&apos;re Going to Raas!
+                    <span className="text-[10px] uppercase font-bold tracking-[0.25em] text-[#f4ce78] block">
+                      Pass Confirmed • Ready for Entry
+                    </span>
+                    <h4 className="font-serif text-2xl font-bold text-white mt-1">
+                      You&apos;re Going to Rangilo Raas!
                     </h4>
-                    <p className="text-sm text-white/80 mt-1">
-                      Your {activeTicketObj.name} ({formQuantity} pass{formQuantity > 1 ? 'es' : ''}) has been confirmed.
+                    <p className="text-xs text-white/70 mt-1">
+                      Thank you, <strong className="text-[#ffd58a]">{confirmedTicket.customerName}</strong>. Your passes have been confirmed and secured.
                     </p>
                   </div>
-                  <div className="p-4 rounded-xl bg-[#220713] border border-[#f4ce78]/30 text-left text-xs space-y-1.5">
-                    <p className="flex justify-between">
-                      <span className="text-white/60">Attendee:</span>
-                      <span className="font-bold text-white">{customerName || 'Aryan Patel'}</span>
-                    </p>
-                    <p className="flex justify-between">
-                      <span className="text-white/60">Amount Paid:</span>
-                      <span className="font-bold text-[#f4ce78]">&#8377;{totalPrice.toLocaleString('en-IN')}</span>
-                    </p>
-                    <p className="flex justify-between">
-                      <span className="text-white/60">Gate:</span>
-                      <span className="font-bold text-white">Main Dance Arena Gate</span>
-                    </p>
-                    <p className="text-[10px] text-emerald-400 pt-1">
-                      ✓ Digital QR ticket dispatched to {customerEmail || 'your email'}
-                    </p>
+
+                  {/* Scannable Encrypted QR Code Card */}
+                  <div className="p-4 rounded-2xl bg-[#1c0812] border border-[#f4ce78]/40 shadow-xl space-y-3">
+                    <div className="p-3 bg-white rounded-xl inline-block shadow-lg mx-auto">
+                      <img
+                        src={confirmedTicket.qrCodeUrl}
+                        alt="Encrypted Ticket QR Code"
+                        className="w-40 h-40 mx-auto block"
+                      />
+                      <p className="text-[10px] font-mono text-zinc-900 text-center mt-1.5 font-bold tracking-wider">
+                        {confirmedTicket.ticketId}
+                      </p>
+                    </div>
+
+                    <div className="text-xs text-white/80 space-y-1.5 text-left border-t border-white/10 pt-3">
+                      <div className="flex justify-between">
+                        <span className="text-white/60">Pass Category:</span>
+                        <span className="font-bold text-white">{confirmedTicket.tierName}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-white/60">Quantity:</span>
+                        <span className="font-bold text-white">
+                          {confirmedTicket.quantity} Pass ({confirmedTicket.totalAttendees} Attendees)
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-white/60">Gate Entrance:</span>
+                        <span className="font-bold text-emerald-400">{confirmedTicket.gateEntry}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-white/60">Amount Paid:</span>
+                        <span className="font-bold text-[#f4ce78]">&#8377;{confirmedTicket.totalPaid.toLocaleString('en-IN')}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-white/60">Payment Ref:</span>
+                        <span className="font-mono text-[11px] text-sky-400 truncate max-w-[200px]">{confirmedTicket.paymentId}</span>
+                      </div>
+                    </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setIsBookingModalOpen(false)}
-                    className="w-full py-3.5 rounded-xl bg-gradient-to-r from-[#ffe38f] via-[#f4c45b] to-[#efae4b] text-[14px] font-bold uppercase tracking-wider text-[#180908] shadow-lg"
-                  >
-                    Done
-                  </button>
+
+                  {/* Gmail Dispatch Notification */}
+                  {emailDeliveryStatus?.success ? (
+                    <div className="p-3 rounded-xl bg-emerald-950/70 border border-emerald-500/50 text-left text-xs text-emerald-300 flex items-start gap-2.5">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="font-semibold text-emerald-200">Email Sent via Gmail</p>
+                        <p className="text-[11px] text-emerald-300/80">
+                          A digital pass with this encrypted QR code has been delivered to <strong>{confirmedTicket.customerEmail}</strong>.
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-3 rounded-xl bg-[#280d19] border border-[#f4ce78]/40 text-left text-xs text-[#ffd58a] flex items-start gap-2.5">
+                      <Sparkles className="w-4 h-4 text-[#f4ce78] shrink-0 mt-0.5" />
+                      <div>
+                        <p className="font-semibold text-white">Pass Verified & Issued</p>
+                        <p className="text-[11px] text-white/70">
+                          Your pass has been generated with encrypted QR. You can save or open your digital pass online below.
+                          {emailDeliveryStatus?.error && (
+                            <span className="block mt-1 text-rose-300">Email delivery: {emailDeliveryStatus.error}</span>
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Action Buttons */}
+                  <div className="space-y-2 pt-1">
+                    <a
+                      href={`/ticket/${confirmedTicket.ticketId}?token=${encodeURIComponent(confirmedTicket.ticketToken)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-[#ffe38f] via-[#f4c45b] to-[#efae4b] text-[14px] font-bold uppercase tracking-wider text-[#180908] shadow-[0_6px_22px_rgba(239,174,75,0.35)] flex items-center justify-center gap-2 transition hover:brightness-105 active:scale-[0.98]"
+                    >
+                      <span>View Official Digital Pass</span>
+                      <ExternalLink className="w-4 h-4 text-[#180908]" />
+                    </a>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => window.print()}
+                        className="py-2.5 px-3 rounded-xl bg-[#240816] border border-[#f4ce78]/30 text-xs font-semibold text-white hover:bg-[#340c21] transition flex items-center justify-center gap-1.5 cursor-pointer"
+                      >
+                        <Download className="w-3.5 h-3.5 text-[#f4ce78]" />
+                        <span>Print Pass</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setIsBookingModalOpen(false)}
+                        className="py-2.5 px-3 rounded-xl bg-[#1b0812] border border-white/10 text-xs font-semibold text-white/80 hover:bg-white/10 transition cursor-pointer"
+                      >
+                        Done
+                      </button>
+                    </div>
+                  </div>
                 </div>
               ) : (
                 /* Booking Form */
-                <form onSubmit={handleFormSubmit} className="space-y-4">
+                <form onSubmit={handleFormSubmit} noValidate className="space-y-4">
+                  {paymentError && (
+                    <div className="p-3 rounded-xl bg-rose-950/80 border border-rose-500/50 text-xs text-rose-200 flex items-start gap-2">
+                      <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                      <span>{paymentError}</span>
+                    </div>
+                  )}
+
                   {/* Ticket Type Selector (Compact Segmented Pills) */}
                   <div>
                     <label className="block text-[11px] font-bold uppercase tracking-wider text-[#f4ce78] mb-1.5">
@@ -836,49 +1171,100 @@ export default function Home() {
                     </div>
                   </div>
 
-                  {/* Customer Inputs */}
-                  <div className="space-y-2.5">
-                    <label className="block">
-                      <span className="block text-[11px] font-semibold text-white/80 mb-1">
+                  {/* Customer Inputs with Live Validation */}
+                  <div className="space-y-3">
+                    {/* Full Name */}
+                    <div>
+                      <label className="block text-[11px] font-semibold text-white/80 mb-1">
                         Full Name *
-                      </span>
-                      <input
-                        required
-                        type="text"
-                        value={customerName}
-                        onChange={(e) => setCustomerName(e.target.value)}
-                        placeholder="e.g. Aryan Patel"
-                        className="w-full h-11 px-3.5 rounded-xl bg-[#18050e] border border-[#f4ce78]/30 text-sm text-white placeholder:text-white/40 focus:outline-none focus:border-[#f4ce78] focus:ring-1 focus:ring-[#f4ce78]"
-                      />
-                    </label>
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={customerName}
+                          onChange={(e) => handleNameChange(e.target.value)}
+                          onBlur={() => handleBlur('name')}
+                          placeholder="e.g. Aryan Patel"
+                          className={`w-full h-11 px-3.5 rounded-xl bg-[#18050e] text-sm text-white placeholder:text-white/40 focus:outline-none transition-colors ${
+                            touched.name && errors.name
+                              ? 'border border-rose-500/80 ring-1 ring-rose-500/40 bg-rose-950/20'
+                              : touched.name && !errors.name
+                              ? 'border border-emerald-500/60 ring-1 ring-emerald-500/30'
+                              : 'border border-[#f4ce78]/30 focus:border-[#f4ce78] focus:ring-1 focus:ring-[#f4ce78]'
+                          }`}
+                        />
+                        {touched.name && !errors.name && (
+                          <CheckCircle2 className="w-4 h-4 text-emerald-400 absolute right-3 top-1/2 -translate-y-1/2" />
+                        )}
+                      </div>
+                      {touched.name && errors.name && (
+                        <p className="mt-1 flex items-center gap-1 text-[11px] text-rose-400 pl-1">
+                          <AlertCircle className="w-3 h-3 shrink-0" /> {errors.name}
+                        </p>
+                      )}
+                    </div>
 
-                    <label className="block">
-                      <span className="block text-[11px] font-semibold text-white/80 mb-1">
+                    {/* Email */}
+                    <div>
+                      <label className="block text-[11px] font-semibold text-white/80 mb-1">
                         Email Address (For E-Ticket) *
-                      </span>
-                      <input
-                        required
-                        type="email"
-                        value={customerEmail}
-                        onChange={(e) => setCustomerEmail(e.target.value)}
-                        placeholder="e.g. aryan@example.com"
-                        className="w-full h-11 px-3.5 rounded-xl bg-[#18050e] border border-[#f4ce78]/30 text-sm text-white placeholder:text-white/40 focus:outline-none focus:border-[#f4ce78] focus:ring-1 focus:ring-[#f4ce78]"
-                      />
-                    </label>
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="email"
+                          value={customerEmail}
+                          onChange={(e) => handleEmailChange(e.target.value)}
+                          onBlur={() => handleBlur('email')}
+                          placeholder="e.g. aryan@example.com"
+                          className={`w-full h-11 px-3.5 rounded-xl bg-[#18050e] text-sm text-white placeholder:text-white/40 focus:outline-none transition-colors ${
+                            touched.email && errors.email
+                              ? 'border border-rose-500/80 ring-1 ring-rose-500/40 bg-rose-950/20'
+                              : touched.email && !errors.email
+                              ? 'border border-emerald-500/60 ring-1 ring-emerald-500/30'
+                              : 'border border-[#f4ce78]/30 focus:border-[#f4ce78] focus:ring-1 focus:ring-[#f4ce78]'
+                          }`}
+                        />
+                        {touched.email && !errors.email && (
+                          <CheckCircle2 className="w-4 h-4 text-emerald-400 absolute right-3 top-1/2 -translate-y-1/2" />
+                        )}
+                      </div>
+                      {touched.email && errors.email && (
+                        <p className="mt-1 flex items-center gap-1 text-[11px] text-rose-400 pl-1">
+                          <AlertCircle className="w-3 h-3 shrink-0" /> {errors.email}
+                        </p>
+                      )}
+                    </div>
 
-                    <label className="block">
-                      <span className="block text-[11px] font-semibold text-white/80 mb-1">
-                        Mobile Number (+91) *
-                      </span>
-                      <input
-                        required
-                        type="tel"
-                        value={customerPhone}
-                        onChange={(e) => setCustomerPhone(e.target.value)}
-                        placeholder="9876543210"
-                        className="w-full h-11 px-3.5 rounded-xl bg-[#18050e] border border-[#f4ce78]/30 text-sm text-white placeholder:text-white/40 focus:outline-none focus:border-[#f4ce78] focus:ring-1 focus:ring-[#f4ce78]"
-                      />
-                    </label>
+                    {/* Mobile Number */}
+                    <div>
+                      <label className="block text-[11px] font-semibold text-white/80 mb-1">
+                        Mobile Number (10 Digits) *
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="tel"
+                          value={customerPhone}
+                          onChange={(e) => handlePhoneChange(e.target.value)}
+                          onBlur={() => handleBlur('phone')}
+                          placeholder="9876543210"
+                          className={`w-full h-11 px-3.5 rounded-xl bg-[#18050e] text-sm text-white placeholder:text-white/40 focus:outline-none transition-colors ${
+                            touched.phone && errors.phone
+                              ? 'border border-rose-500/80 ring-1 ring-rose-500/40 bg-rose-950/20'
+                              : touched.phone && !errors.phone
+                              ? 'border border-emerald-500/60 ring-1 ring-emerald-500/30'
+                              : 'border border-[#f4ce78]/30 focus:border-[#f4ce78] focus:ring-1 focus:ring-[#f4ce78]'
+                          }`}
+                        />
+                        {touched.phone && !errors.phone && (
+                          <CheckCircle2 className="w-4 h-4 text-emerald-400 absolute right-3 top-1/2 -translate-y-1/2" />
+                        )}
+                      </div>
+                      {touched.phone && errors.phone && (
+                        <p className="mt-1 flex items-center gap-1 text-[11px] text-rose-400 pl-1">
+                          <AlertCircle className="w-3 h-3 shrink-0" /> {errors.phone}
+                        </p>
+                      )}
+                    </div>
                   </div>
 
                   {/* Total & Submit Button */}
@@ -894,10 +1280,15 @@ export default function Home() {
 
                     <button
                       type="submit"
-                      disabled={isProcessing}
-                      className="w-full py-4 rounded-xl bg-gradient-to-r from-[#ffe38f] via-[#f4c45b] to-[#efae4b] text-[14px] font-bold uppercase tracking-wider text-[#180908] shadow-[0_6px_22px_rgba(239,174,75,0.35)] active:scale-[0.98] transition-all flex items-center justify-center gap-2 cursor-pointer"
+                      disabled={isProcessing || isVerifying}
+                      className="w-full py-4 rounded-xl bg-gradient-to-r from-[#ffe38f] via-[#f4c45b] to-[#efae4b] text-[14px] font-bold uppercase tracking-wider text-[#180908] shadow-[0_6px_22px_rgba(239,174,75,0.35)] active:scale-[0.98] transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-70"
                     >
-                      {isProcessing ? (
+                      {isVerifying ? (
+                        <>
+                          <RefreshCw className="w-4 h-4 animate-spin text-[#180908]" />
+                          <span>Verifying Payment & Issuing Pass...</span>
+                        </>
+                      ) : isProcessing ? (
                         <>
                           <RefreshCw className="w-4 h-4 animate-spin text-[#180908]" />
                           <span>Connecting to Razorpay...</span>
@@ -912,7 +1303,7 @@ export default function Home() {
 
                     <div className="flex items-center justify-center gap-1.5 text-[11px] text-white/60">
                       <ShieldCheck className="w-3.5 h-3.5 text-[#f4ce78]" />
-                      <span>Secure payments powered by</span>
+                      <span>Secure test payment powered by</span>
                       <strong className="text-white font-semibold">Razorpay</strong>
                     </div>
                   </div>

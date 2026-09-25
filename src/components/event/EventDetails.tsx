@@ -128,7 +128,7 @@ export function EventDetails() {
                 <div>
                   <p className="text-xs uppercase tracking-wider text-[#D4AF37] font-semibold">Age & Entry Policy</p>
                   <p className="text-sm font-medium text-[#FAF5EF] mt-0.5">Family & Friends Welcomed</p>
-                  <p className="text-xs text-[#FAF5EF]/60 mt-0.5">Children under 5 years enter free with accompanying adults.</p>
+                  <p className="text-xs text-[#FAF5EF]/60 mt-0.5">Children under 5 years require an accompanying adult pass.</p>
                 </div>
               </div>
 

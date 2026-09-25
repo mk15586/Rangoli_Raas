@@ -38,7 +38,7 @@ export function TicketBookingSection({
           </h2>
           <DandiyaDivider className="my-4" />
           <p className="text-sm sm:text-base text-[#FAF5EF]/70">
-            All passes include admission, complimentary authentic Dandiya sticks, and contactless digital gate entry.
+            All passes include admission, verified digital QR entry, and contactless gate verification.
           </p>
         </div>
 

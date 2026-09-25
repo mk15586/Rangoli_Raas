@@ -11,7 +11,7 @@ export const EVENT_DETAILS = {
   venue: "Maharashtra Mandal",
   address: "Maharashtra Mandal, Patna",
   city: "Bihar, India",
-  agePolicy: "All age groups welcome (Kids under 5 free)",
+  agePolicy: "All age groups welcome (children under 5 require an accompanying adult pass)",
   dressCode: "Festive Traditional (Chaniya Choli / Kediyu / Kurta Pajama)",
   parking: "Reserved parking available for pass holders",
   helpline: "+91 79031 27663",
@@ -30,7 +30,7 @@ export const TICKET_TIERS: TicketTier[] = [
       "Event entry",
       "Access to the dance arena",
     ],
-    sticksIncluded: "1 Pair Included",
+    passHighlight: "Verified Digital QR Entry",
   },
   {
     id: "couple",
@@ -43,7 +43,7 @@ export const TICKET_TIERS: TicketTier[] = [
       "Entry for 2 people",
       "Access to the dance arena",
     ],
-    sticksIncluded: "2 Pairs Included",
+    passHighlight: "Priority Couple Entry",
   },
   {
     id: "family",
@@ -57,7 +57,7 @@ export const TICKET_TIERS: TicketTier[] = [
       "Entry for 5 people",
       "Access to the dance arena",
     ],
-    sticksIncluded: "5 Pairs Included",
+    passHighlight: "Family Gate Access",
   },
 ];
 
@@ -132,8 +132,8 @@ export const ARTISTS = [
 
 export const FAQS = [
   {
-    question: "Do I need to bring my own Dandiya sticks?",
-    answer: "No, every ticket holder receives authentic wooden Dandiya sticks at the venue entrance upon scanning their e-ticket. VIP passes include premium velvet-grip sticks."
+    question: "What do I need for entry?",
+    answer: "Bring your digital QR pass and a valid photo ID for smooth verification at the venue entrance."
   },
   {
     question: "What is the dress code for the evening?",
@@ -145,7 +145,7 @@ export const FAQS = [
   },
   {
     question: "Is there a specific age limit?",
-    answer: "The event is family-friendly and welcoming to all age groups. Children aged 5 and under enjoy free entry when accompanied by an adult pass-holder."
+    answer: "The event is family-friendly and welcoming to all age groups. Children aged 5 and under require an accompanying adult pass-holder."
   },
   {
     question: "Can I cancel or transfer my ticket?",
@@ -153,6 +153,6 @@ export const FAQS = [
   },
   {
     question: "Is parking available at the venue?",
-    answer: "Yes, the venue features dedicated multi-acre secure parking. VIP ticket holders receive complimentary valet parking right at the grand portico."
+    answer: "Yes, the venue features dedicated multi-acre secure parking. VIP ticket holders have access to priority valet parking at the grand portico."
   }
 ];

@@ -202,7 +202,7 @@ export function HeroSection({ onOpenBookingModal }: HeroSectionProps) {
           </span>
           <span className="hidden sm:inline text-white/20">•</span>
           <span className="hidden sm:flex items-center gap-1.5">
-            Free Wooden Dandiya Sticks
+            Verified Digital QR Entry
           </span>
           <span className="hidden sm:inline text-white/20">•</span>
           <span className="flex items-center gap-1.5">

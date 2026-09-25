@@ -11,7 +11,7 @@ export interface TicketTier {
   popular?: boolean;
   benefits: string[];
   stockWarning?: string;
-  sticksIncluded: string;
+  passHighlight: string;
 }
 
 export interface CartItem {
@@ -55,4 +55,10 @@ export interface EventHighlight {
   description: string;
   iconName: string;
   tag: string;
+}
+
+declare global {
+  interface Window {
+    Razorpay?: any;
+  }
 }

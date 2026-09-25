@@ -329,7 +329,7 @@ export function TicketPass({ ticket, onClose }: TicketPassProps) {
               <div className="text-[11px] text-[#FAF5EF]/60 space-y-1">
                 <p><strong>Entry Guidelines:</strong></p>
                 <p>• Show this digital pass or QR at Gate {ticket.gateEntry}.</p>
-                <p>• Receive your wooden Dandiya sticks at the entry counter.</p>
+                <p>• Present your digital QR pass and valid photo ID at the entry gate.</p>
                 <p>• Dress code: Festive Traditional (Chaniya Choli / Kurta Pajama).</p>
               </div>
             </div>

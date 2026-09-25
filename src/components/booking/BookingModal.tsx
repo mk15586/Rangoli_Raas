@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import confetti from 'canvas-confetti';
 import { TICKET_TIERS, EVENT_DETAILS } from '@/lib/constants';
 import { TicketTierId, CustomerDetails, GeneratedTicket } from '@/lib/types';
+import { validateBookingDetails } from '@/lib/bookingValidation';
 import { TicketPass } from '@/components/ticket/TicketPass';
 import { X, ArrowRight, ArrowLeft, Check, ShieldCheck, CreditCard, Smartphone, Building, Sparkles, AlertCircle, RefreshCw } from 'lucide-react';
 
@@ -76,18 +77,12 @@ export function BookingModal({ isOpen, onClose, initialQuantities }: BookingModa
 
   // Validation
   const validateDetails = () => {
-    const errs: Record<string, string> = {};
-    if (!customer.fullName.trim() || customer.fullName.trim().length < 3) {
-      errs.fullName = 'Please enter your full legal name';
-    }
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!customer.email.trim() || !emailRegex.test(customer.email.trim())) {
-      errs.email = 'Please provide a valid email (e-ticket will be sent here)';
-    }
-    const phoneDigits = customer.phone.replace(/\D/g, '');
-    if (!phoneDigits || phoneDigits.length < 10) {
-      errs.phone = 'Please enter a valid 10-digit mobile number';
-    }
+    const fieldErrors = validateBookingDetails(customer.fullName, customer.email, customer.phone);
+    const errs: Record<string, string> = {
+      ...(fieldErrors.name ? { fullName: fieldErrors.name } : {}),
+      ...(fieldErrors.email ? { email: fieldErrors.email } : {}),
+      ...(fieldErrors.phone ? { phone: fieldErrors.phone } : {}),
+    };
     if (!customer.acceptTerms) {
       errs.terms = 'Please accept the event entry guidelines to proceed';
     }
@@ -236,7 +231,7 @@ export function BookingModal({ isOpen, onClose, initialQuantities }: BookingModa
                           )}
                         </div>
                         <p className="text-xs text-[#FAF5EF]/70 mt-0.5">
-                          {tier.tagline} • <span className="text-[#E5B869] font-medium">{tier.sticksIncluded}</span>
+                          {tier.tagline} • <span className="text-[#E5B869] font-medium">{tier.passHighlight}</span>
                         </p>
                         <p className="font-serif text-base font-bold gold-gradient-text mt-1">
                           ₹{tier.price.toLocaleString('en-IN')} <span className="text-xs text-[#FAF5EF]/50 font-normal">/ pass</span>

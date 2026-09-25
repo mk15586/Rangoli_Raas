@@ -214,7 +214,7 @@ export default function BookPage() {
                         )}
                       </div>
                       <p className="text-xs text-[#FAF5EF]/70 mt-1">
-                        {tier.tagline} • <span className="text-[#E5B869] font-medium">{tier.sticksIncluded}</span>
+                        {tier.tagline} • <span className="text-[#E5B869] font-medium">{tier.passHighlight}</span>
                       </p>
                       <p className="font-serif text-lg font-bold gold-gradient-text mt-1">
                         ₹{tier.price.toLocaleString('en-IN')}

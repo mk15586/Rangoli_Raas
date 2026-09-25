@@ -1,43 +1,111 @@
 'use client';
 
-import React, { use } from 'react';
+import React, { use, useEffect, useState, Suspense } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { Navbar } from '@/components/layout/Navbar';
 import { Footer } from '@/components/layout/Footer';
 import { TicketPass } from '@/components/ticket/TicketPass';
 import { GeneratedTicket } from '@/lib/types';
 import { EVENT_DETAILS } from '@/lib/constants';
-import { ArrowLeft, Ticket } from 'lucide-react';
+import { ArrowLeft, Ticket, ShieldCheck, AlertCircle, RefreshCw } from 'lucide-react';
 
 interface PageProps {
   params: Promise<{ id: string }>;
 }
 
+function TicketContent({ ticketId }: { ticketId: string }) {
+  const searchParams = useSearchParams();
+  const token = searchParams.get('token');
+
+  const [loading, setLoading] = useState(!!token);
+  const [isVerified, setIsVerified] = useState(false);
+  const [ticketData, setTicketData] = useState<GeneratedTicket | null>(null);
+
+  useEffect(() => {
+    if (!token) return;
+
+    fetch(`/api/ticket/verify?ticketId=${encodeURIComponent(ticketId)}&token=${encodeURIComponent(token)}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.valid && data.ticket) {
+          const t = data.ticket;
+          setIsVerified(true);
+          setTicketData({
+            ticketId: t.ticketId || ticketId,
+            ticketToken: token,
+            orderId: t.orderId || 'order_verified',
+            customerName: t.customerName || 'Pass Holder',
+            customerEmail: t.customerEmail || '',
+            customerPhone: t.customerPhone || '',
+            tierId: (t.tierId as any) || 'regular',
+            tierName: t.tierName || 'Entry Pass',
+            quantity: t.quantity || 1,
+            totalAttendees: t.totalAttendees || 1,
+            subtotal: t.totalPaid || 299,
+            tax: 0,
+            totalPaid: t.totalPaid || 299,
+            bookingDate: new Date(t.issuedAt || Date.now()).toLocaleDateString('en-IN', {
+              day: 'numeric',
+              month: 'short',
+              year: 'numeric',
+            }),
+            eventDate: t.eventDate || EVENT_DETAILS.dateFormatted,
+            eventTime: EVENT_DETAILS.doorsOpen,
+            venue: t.venue || EVENT_DETAILS.venue,
+            gateEntry: t.tierId === 'family' ? 'Gate 1 (Family Entry)' : 'Gate 3 (Central)',
+          });
+        }
+      })
+      .catch((err) => {
+        console.error('Error verifying token:', err);
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+  }, [token, ticketId]);
+
+  if (!isVerified || !ticketData) {
+    return (
+      <div className="mb-6 p-5 rounded-xl bg-[#1c0812] border border-rose-500/40 text-center">
+        <AlertCircle className="w-8 h-8 mx-auto mb-2 text-rose-300" />
+        <p className="text-sm font-bold text-white">Ticket verification required</p>
+        <p className="text-xs text-rose-200/80 mt-1">This page does not display an admission pass without a valid captured payment token.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      {/* Top Banner Verification Status */}
+      {loading ? (
+        <div className="mb-6 p-4 rounded-xl bg-[#1c0812] border border-[#f4c45b]/30 flex items-center justify-center gap-3 text-sm text-[#f4c45b]">
+          <RefreshCw className="w-4 h-4 animate-spin" />
+          <span>Verifying encrypted security signature...</span>
+        </div>
+      ) : isVerified ? (
+        <div className="mb-6 p-4 rounded-xl bg-emerald-950/70 border border-emerald-500/60 flex items-center gap-3 shadow-lg">
+          <div className="w-8 h-8 rounded-full bg-emerald-500/20 border border-emerald-400 flex items-center justify-center text-emerald-400 shrink-0">
+            <ShieldCheck className="w-5 h-5" />
+          </div>
+          <div>
+            <p className="text-sm font-bold text-white">Cryptographically Verified Entry Pass</p>
+            <p className="text-xs text-emerald-300">
+              AES-256 authenticated token confirmed for <strong>{ticketData.customerName}</strong>. Valid for event admission.
+            </p>
+          </div>
+        </div>
+      ) : null}
+
+      {/* The Ticket Pass */}
+      <TicketPass ticket={ticketData} />
+    </div>
+  );
+}
+
 export default function TicketPage({ params }: PageProps) {
   const resolvedParams = use(params);
   const ticketId = resolvedParams.id;
-
-  // Fallback demo ticket if viewed directly via URL
-  const demoTicket: GeneratedTicket = {
-    ticketId: ticketId || 'DN-892415',
-    ticketToken: `DND_${ticketId || '9K2LP91Q'}X882`,
-    orderId: 'order_rzp_9829381',
-    customerName: 'Ananya Sharma',
-    customerEmail: 'ananya.sharma@example.com',
-    customerPhone: '+91 98250 12345',
-    tierId: 'family',
-    tierName: 'Family Pass',
-    quantity: 1,
-    totalAttendees: 5,
-    subtotal: 999,
-    tax: 180,
-    totalPaid: 1179,
-    bookingDate: '13 Sep 2026',
-    eventDate: EVENT_DETAILS.dateFormatted,
-    eventTime: EVENT_DETAILS.doorsOpen,
-    venue: EVENT_DETAILS.venue,
-    gateEntry: 'Gate 1 (Family Entry)',
-  };
 
   return (
     <div className="min-h-screen bg-[#090306] text-[#FAF5EF] flex flex-col">
@@ -54,7 +122,7 @@ export default function TicketPage({ params }: PageProps) {
           </Link>
 
           <Link
-            href="/book"
+            href="/#tickets"
             className="inline-flex items-center gap-1.5 text-xs uppercase tracking-wider text-[#D4AF37] hover:text-[#F3E5AB] transition-colors"
           >
             <Ticket className="w-4 h-4" />
@@ -74,8 +142,9 @@ export default function TicketPage({ params }: PageProps) {
           </p>
         </div>
 
-        {/* The Ticket Pass */}
-        <TicketPass ticket={demoTicket} />
+        <Suspense fallback={<div className="p-8 text-center text-white/50">Loading ticket...</div>}>
+          <TicketContent ticketId={ticketId} />
+        </Suspense>
       </main>
 
       <Footer />

@@ -5,7 +5,7 @@ export function DandiyaDivider({ className = "" }: { className?: string }) {
     <div className={`flex items-center justify-center gap-3 my-6 ${className}`} aria-hidden="true">
       <div className="h-[1px] w-12 sm:w-24 bg-gradient-to-r from-transparent via-[#D4AF37]/50 to-[#D4AF37]" />
       <div className="relative flex items-center justify-center">
-        {/* Subtle crossed dandiya sticks motif */}
+        {/* Subtle crossed festival motif */}
         <svg width="32" height="24" viewBox="0 0 32 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-[#D4AF37]">
           {/* Stick 1 */}
           <line x1="4" y1="20" x2="28" y2="4" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />

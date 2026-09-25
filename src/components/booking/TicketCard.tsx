@@ -58,11 +58,11 @@ export function TicketCard({ tier, quantity, onQuantityChange }: TicketCardProps
           </span>
         </div>
 
-        {/* Dandiya Sticks Highlight Callout */}
+        {/* Pass Highlight Callout */}
         <div className="mb-5 p-2.5 rounded-lg bg-[#6E1E3A]/30 border border-[#D4AF37]/25 flex items-center gap-2">
           <div className="w-2 h-2 rounded-full bg-[#E5B869] shrink-0" />
           <span className="text-xs font-semibold text-[#F3E5AB]">
-            {tier.sticksIncluded}
+            {tier.passHighlight}
           </span>
         </div>
 
