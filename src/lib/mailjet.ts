@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer';
+import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { TicketPayload } from './ticketSecurity';
 
 interface SendTicketEmailParams {
@@ -15,17 +16,36 @@ export interface EmailSendResult {
   messageId?: string;
 }
 
-/**
- * Builds responsive, festival-themed HTML email for the e-ticket
- */
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"']/g, (character) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  })[character] || character);
+}
+
+function getGateEntry(ticket: TicketPayload): string {
+  return ticket.tierId === 'family' ? 'Gate 1 (Family Entry)' : 'Gate 3 (Central)';
+}
+
 function buildTicketEmailHtml(params: {
   ticket: TicketPayload;
   qrCodeCidOrDataUrl: string;
   verifyUrl: string;
 }): string {
   const { ticket, qrCodeCidOrDataUrl, verifyUrl } = params;
-  const eventDate = ticket.eventDate || 'Saturday, 17 October 2026';
-  const venue = ticket.venue || 'Maharashtra Mandal, Patna';
+  const eventDate = escapeHtml(ticket.eventDate || 'Saturday, 17 October 2026');
+  const venue = escapeHtml(ticket.venue || 'Maharashtra Mandal, Patna');
+  const customerName = escapeHtml(ticket.customerName);
+  const tierName = escapeHtml(ticket.tierName);
+  const ticketId = escapeHtml(ticket.ticketId);
+  const paymentId = escapeHtml(ticket.paymentId);
+  const customerPhone = escapeHtml(ticket.customerPhone);
+  const gateEntry = escapeHtml(getGateEntry(ticket));
+  const safeVerifyUrl = escapeHtml(verifyUrl);
+  const amountPaid = `INR ${ticket.totalPaid.toLocaleString('en-IN')}`;
 
   return `
 <!DOCTYPE html>
@@ -33,167 +53,58 @@ function buildTicketEmailHtml(params: {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Your Pass for Rangilo Raas 2026</title>
+  <title>Payment confirmed | Rangilo Raas 2026</title>
 </head>
-<body style="margin: 0; padding: 0; background-color: #0b0206; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #fff8ee;">
-  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color: #0b0206; padding: 24px 12px;">
+<body style="margin:0;padding:0;background:#f3f1ed;font-family:Arial,Helvetica,sans-serif;color:#26221f;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#f3f1ed;padding:32px 12px;">
     <tr>
       <td align="center">
-        <!-- Main Card Container -->
-        <table role="presentation" width="100%" style="max-width: 600px; background: linear-gradient(180deg, #1f0714 0%, #15030d 100%); border-radius: 20px; border: 1px solid #e5ad42; box-shadow: 0 16px 40px rgba(0,0,0,0.7); overflow: hidden;" cellspacing="0" cellpadding="0" border="0">
-
-          <!-- Festival Header Banner -->
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:600px;background:#ffffff;border:1px solid #ded9d1;">
           <tr>
-            <td style="background: linear-gradient(135deg, #6E1E3A 0%, #3e0b1d 100%); padding: 32px 24px; text-align: center; border-bottom: 2px solid #e5ad42;">
-              <p style="margin: 0 0 6px 0; font-size: 12px; font-weight: 700; letter-spacing: 3px; color: #f4c45b; text-transform: uppercase;">
-                ✨ Official Entry Pass & E-Ticket ✨
-              </p>
-              <h1 style="margin: 0; font-size: 28px; font-weight: 800; color: #ffffff; letter-spacing: 1px; text-transform: uppercase;">
-                RANGILO RAAS 2026
-              </h1>
-              <p style="margin: 8px 0 0 0; font-size: 13px; color: #ffd699; font-weight: 500;">
-                The Grandest Dandiya & Garba Mahotsav
-              </p>
+            <td style="padding:30px 32px;background:#451629;border-bottom:4px solid #c69a46;">
+              <p style="margin:0 0 8px;color:#e5c98d;font-size:11px;font-weight:700;letter-spacing:2px;">RANGILO RAAS 2026</p>
+              <h1 style="margin:0;color:#ffffff;font-size:24px;line-height:1.3;font-weight:700;">Payment confirmed</h1>
+              <p style="margin:8px 0 0;color:#f2e9e5;font-size:14px;line-height:1.5;">Your admission pass is ready.</p>
             </td>
           </tr>
-
-          <!-- Confirmation Badge -->
           <tr>
-            <td style="padding: 24px 28px 12px 28px; text-align: center;">
-              <table role="presentation" align="center" cellspacing="0" cellpadding="0" border="0" style="background: rgba(34, 197, 94, 0.12); border: 1px solid rgba(34, 197, 94, 0.4); border-radius: 9999px; margin: 0 auto;">
+            <td style="padding:28px 32px 18px;">
+              <p style="margin:0 0 10px;font-size:15px;line-height:1.6;">Hello ${customerName},</p>
+              <p style="margin:0;color:#5e5852;font-size:14px;line-height:1.7;">Thank you for your booking. Your payment has been received and your ticket is attached as a print-ready PDF. Please present the QR code at the venue entrance along with a valid photo ID.</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:0 32px 26px;">
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border:1px solid #e2ddd5;">
+                <tr><td style="padding:14px 16px;background:#f7f5f1;border-bottom:1px solid #e2ddd5;font-size:12px;color:#625951;">Ticket ID <strong style="color:#451629;">${ticketId}</strong></td></tr>
+                <tr><td style="padding:14px 16px;font-size:13px;line-height:1.8;color:#3d3833;">${tierName} &nbsp;|&nbsp; ${ticket.quantity} pass(es), ${ticket.totalAttendees} attendee(s)<br>${eventDate}<br>${venue}<br>Entry: ${gateEntry}<br>Amount paid: <strong>${escapeHtml(amountPaid)}</strong></td></tr>
+              </table>
+              <table role="presentation" align="center" cellspacing="0" cellpadding="0" border="0" style="margin:22px auto 0;">
                 <tr>
-                  <td style="padding: 6px 18px; font-size: 13px; font-weight: 700; color: #4ade80;">
-                    ✓ PAYMENT CONFIRMED & TICKET ISSUED
+                  <td align="center" style="padding:12px;background:#ffffff;border:1px solid #e2ddd5;">
+                    <img src="${qrCodeCidOrDataUrl}" alt="Ticket entry QR code" width="150" height="150" style="display:block;width:150px;height:150px;">
+                    <p style="margin:10px 0 0;color:#625951;font-size:11px;">Ticket entry QR code</p>
                   </td>
                 </tr>
               </table>
-              <p style="margin: 14px 0 4px 0; font-size: 15px; color: #fef3c7;">
-                Namaste <strong>${ticket.customerName}</strong>,
-              </p>
-              <p style="margin: 0; font-size: 13px; color: #e2d9d2; line-height: 1.5;">
-                Your passes for Rangilo Raas 2026 are confirmed. Present the secure encrypted QR code below at the entry gate.
-              </p>
-            </td>
-          </tr>
-
-          <!-- Ticket Pass Body (Inner Card) -->
-          <tr>
-            <td style="padding: 12px 24px 24px 24px;">
-              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color: #240816; border: 1px dashed #e5ad42; border-radius: 16px; overflow: hidden;">
-
-                <!-- Ticket Tier & Ticket ID -->
-                <tr>
-                  <td style="padding: 20px 20px 14px 20px; background-color: #310b1e; border-bottom: 1px solid #48152e;">
-                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
-                      <tr>
-                        <td>
-                          <span style="font-size: 11px; font-weight: 700; color: #f4c45b; text-transform: uppercase; letter-spacing: 1px; display: block;">
-                            Pass Category
-                          </span>
-                          <span style="font-size: 20px; font-weight: 800; color: #ffffff;">
-                            ${ticket.tierName}
-                          </span>
-                        </td>
-                        <td align="right">
-                          <span style="font-size: 11px; font-weight: 600; color: #d1b5a5; display: block;">
-                            Ticket ID
-                          </span>
-                          <span style="font-size: 15px; font-weight: 800; font-family: monospace; color: #f4c45b; background: #13030b; padding: 4px 8px; border-radius: 6px; border: 1px solid #6E1E3A;">
-                            ${ticket.ticketId}
-                          </span>
-                        </td>
-                      </tr>
-                    </table>
-                  </td>
-                </tr>
-
-                <!-- QR Code Box -->
-                <tr>
-                  <td align="center" style="padding: 24px 20px 16px 20px;">
-                    <div style="display: inline-block; background-color: #ffffff; padding: 12px; border-radius: 12px; box-shadow: 0 4px 14px rgba(0,0,0,0.5);">
-                      <img src="${qrCodeCidOrDataUrl}" alt="Encrypted Ticket QR Code" width="180" height="180" style="display: block; width: 180px; height: 180px;" />
-                    </div>
-                    <p style="margin: 10px 0 0 0; font-size: 11px; color: #fcd34d; font-weight: 600;">
-                      🔒 Encrypted Pass Security Token
-                    </p>
-                    <p style="margin: 2px 0 0 0; font-size: 11px; color: #a89f91;">
-                      Scan at gate for express barcode verification
-                    </p>
-                  </td>
-                </tr>
-
-                <!-- Details Grid -->
-                <tr>
-                  <td style="padding: 10px 24px 24px 24px;">
-                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="font-size: 13px; line-height: 2;">
-                      <tr>
-                        <td style="color: #c9baa7;">Date:</td>
-                        <td align="right" style="font-weight: 700; color: #ffffff;">${eventDate}</td>
-                      </tr>
-                      <tr>
-                        <td style="color: #c9baa7;">Venue:</td>
-                        <td align="right" style="font-weight: 700; color: #ffffff;">${venue}</td>
-                      </tr>
-                      <tr>
-                        <td style="color: #c9baa7;">Quantity:</td>
-                        <td align="right" style="font-weight: 700; color: #ffffff;">${ticket.quantity} Pass (${ticket.totalAttendees} Attendees)</td>
-                      </tr>
-                      <tr>
-                        <td style="color: #c9baa7;">Mobile:</td>
-                        <td align="right" style="font-weight: 700; color: #ffffff;">${ticket.customerPhone}</td>
-                      </tr>
-                      <tr>
-                        <td style="color: #c9baa7;">Amount Paid:</td>
-                        <td align="right" style="font-weight: 800; font-size: 16px; color: #f4c45b;">₹${ticket.totalPaid.toLocaleString('en-IN')}</td>
-                      </tr>
-                      <tr>
-                        <td style="color: #c9baa7;">Payment Reference:</td>
-                        <td align="right" style="font-family: monospace; font-size: 11px; color: #93c5fd;">${ticket.paymentId || 'Razorpay Verified'}</td>
-                      </tr>
-                    </table>
-
-                    <!-- View Online Button -->
-                    <div style="margin-top: 18px; text-align: center;">
-                      <a href="${verifyUrl}" style="display: inline-block; background: linear-gradient(135deg, #f4c45b 0%, #e59d29 100%); color: #18050e; font-size: 13px; font-weight: 800; padding: 12px 24px; border-radius: 8px; text-decoration: none; text-transform: uppercase; letter-spacing: 0.5px;">
-                        View / Print Pass Online
-                      </a>
-                    </div>
-                  </td>
-                </tr>
-
+              <table role="presentation" align="center" cellspacing="0" cellpadding="0" border="0" style="margin:24px auto 0;">
+                <tr><td align="center" style="background:#451629;"><a href="${safeVerifyUrl}" style="display:inline-block;padding:13px 24px;color:#ffffff;font-size:13px;font-weight:700;text-decoration:none;">View or print ticket online</a></td></tr>
               </table>
+              <p style="margin:20px 0 0;text-align:center;color:#77716a;font-size:12px;line-height:1.6;">A copy of your ticket is attached to this email. Keep the QR code private; it is required for entry.</p>
             </td>
           </tr>
-
-          <!-- Guidelines Section -->
           <tr>
-            <td style="padding: 0 28px 24px 28px;">
-              <div style="background-color: #17050e; border: 1px solid #3c1221; border-radius: 12px; padding: 16px;">
-                <h4 style="margin: 0 0 8px 0; font-size: 12px; font-weight: 700; color: #f4c45b; text-transform: uppercase;">
-                  Important Venue Instructions:
-                </h4>
-                <ul style="margin: 0; padding-left: 18px; font-size: 12px; color: #c4b5a5; line-height: 1.6;">
-                  <li>Entry opens at 06:00 PM. Please arrive early to avoid queue delays.</li>
-                  <li>Every attendee must carry a valid photo ID (Aadhaar / Voter ID / Driving License).</li>
-                  <li>Traditional Dandiya attire is warmly encouraged!</li>
-                  <li>Pass is unique and non-transferable once scanned at the turnstile.</li>
-                </ul>
-              </div>
+            <td style="padding:18px 32px;background:#f7f5f1;border-top:1px solid #e2ddd5;color:#716a62;font-size:11px;line-height:1.6;">
+              <strong style="color:#3d3833;">Payment reference:</strong> ${paymentId}<br>
+              <strong style="color:#3d3833;">Contact:</strong> ${customerPhone}<br>
+              Please bring a valid photo ID. For assistance, contact the event organiser.
             </td>
           </tr>
-
-          <!-- Footer -->
           <tr>
-            <td style="background-color: #0d0107; padding: 20px; text-align: center; border-top: 1px solid #2d0b19;">
-              <p style="margin: 0; font-size: 11px; color: #877d73;">
-                Rangilo Raas Dandiya Mahotsav 2026 • Maharashtra Mandal, Patna
-              </p>
-              <p style="margin: 4px 0 0 0; font-size: 10px; color: #5a524a;">
-                Payments secured via Razorpay. Powered by secure Gmail delivery.
-              </p>
+            <td style="padding:16px 32px;text-align:center;color:#8a837b;font-size:11px;">
+              Rangilo Raas 2026 &nbsp;|&nbsp; Maharashtra Mandal, Patna
             </td>
           </tr>
-
         </table>
       </td>
     </tr>
@@ -201,6 +112,99 @@ function buildTicketEmailHtml(params: {
 </body>
 </html>
   `;
+}
+
+async function buildTicketPdf(ticket: TicketPayload, qrCodeDataUrl: string): Promise<Uint8Array> {
+  const document = await PDFDocument.create();
+  const page = document.addPage([595.28, 841.89]);
+  const regular = await document.embedFont(StandardFonts.Helvetica);
+  const bold = await document.embedFont(StandardFonts.HelveticaBold);
+  const { width, height } = page.getSize();
+  const wine = rgb(0.27, 0.09, 0.16);
+  const gold = rgb(0.77, 0.6, 0.27);
+  const ink = rgb(0.16, 0.14, 0.13);
+  const muted = rgb(0.4, 0.37, 0.34);
+  const paper = rgb(0.98, 0.97, 0.94);
+  const qrBase64 = qrCodeDataUrl.replace(/^data:image\/\w+;base64,/, '');
+  const qrImage = await document.embedPng(Buffer.from(qrBase64, 'base64'));
+  const gateEntry = getGateEntry(ticket);
+  const eventDate = ticket.eventDate || 'Saturday, 17 October 2026';
+  const venue = ticket.venue || 'Maharashtra Mandal, Patna';
+  const amountPaid = `INR ${ticket.totalPaid.toLocaleString('en-IN')}`;
+  const issuedAt = new Date(ticket.issuedAt).toLocaleDateString('en-IN', {
+    day: '2-digit', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata',
+  });
+
+  page.drawRectangle({ x: 0, y: 0, width, height, color: paper });
+  page.drawRectangle({ x: 0, y: height - 156, width, height: 156, color: wine });
+  page.drawRectangle({ x: 0, y: height - 160, width, height: 4, color: gold });
+  page.drawText('RANGILO RAAS 2026', { x: 42, y: height - 57, size: 12, font: bold, color: gold });
+  page.drawText('OFFICIAL ADMISSION PASS', { x: 42, y: height - 99, size: 25, font: bold, color: rgb(1, 1, 1) });
+  page.drawText('Payment confirmed', { x: 44, y: height - 126, size: 12, font: regular, color: rgb(0.94, 0.9, 0.87) });
+  page.drawText(`TICKET ID  ${ticket.ticketId}`, { x: 42, y: height - 190, size: 13, font: bold, color: wine });
+  page.drawText(ticket.tierName, { x: 42, y: height - 218, size: 19, font: bold, color: ink });
+  page.drawLine({ start: { x: 42, y: height - 236 }, end: { x: width - 42, y: height - 236 }, thickness: 1, color: gold });
+
+  const drawField = (label: string, value: string, x: number, y: number, maxWidth = 310) => {
+    page.drawText(label.toUpperCase(), { x, y, size: 8, font: bold, color: muted });
+    const valueSize = Math.min(12, Math.max(7, maxWidth / Math.max(1, regular.widthOfTextAtSize(value, 12)) * 12));
+    page.drawText(value, { x, y: y - 17, size: valueSize, font: regular, color: ink, maxWidth });
+  };
+
+  drawField('Primary attendee', ticket.customerName, 42, height - 270);
+  drawField('Email address', ticket.customerEmail, 42, height - 325);
+  drawField('Mobile number', ticket.customerPhone, 42, height - 380);
+  drawField('Event date', eventDate, 42, height - 435);
+  drawField('Venue', venue, 42, height - 490);
+  drawField('Entry gate', gateEntry, 42, height - 545);
+  drawField('Admission', `${ticket.quantity} pass(es) / ${ticket.totalAttendees} attendee(s)`, 42, height - 600);
+  drawField('Total paid', amountPaid, 42, height - 655);
+  drawField('Payment reference', ticket.paymentId, 42, height - 710);
+  drawField('Order reference', ticket.orderId, 42, height - 765);
+
+  const qrSize = 148;
+  const qrX = width - qrSize - 42;
+  const qrY = height - 430;
+  page.drawRectangle({ x: qrX - 11, y: qrY - 11, width: qrSize + 22, height: qrSize + 22, color: rgb(1, 1, 1), borderColor: gold, borderWidth: 1.5 });
+  page.drawImage(qrImage, { x: qrX, y: qrY, width: qrSize, height: qrSize });
+  page.drawText('SCAN FOR ENTRY', { x: qrX + 25, y: qrY - 31, size: 9, font: bold, color: wine });
+  page.drawText('Keep this QR code private.', { x: qrX - 2, y: qrY - 49, size: 8, font: regular, color: muted });
+  page.drawText('Show it at the venue gate.', { x: qrX - 2, y: qrY - 62, size: 8, font: regular, color: muted });
+
+  page.drawRectangle({ x: 0, y: 0, width, height: 42, color: wine });
+  page.drawText(`Issued ${issuedAt}  |  Present this pass and a valid photo ID`, {
+    x: 42, y: 16, size: 9, font: regular, color: rgb(1, 1, 1),
+  });
+
+  return document.save();
+}
+
+function buildTicketEmailText(ticket: TicketPayload, verifyUrl: string): string {
+  const eventDate = ticket.eventDate || 'Saturday, 17 October 2026';
+  const venue = ticket.venue || 'Maharashtra Mandal, Patna';
+
+  return [
+    `Hello ${ticket.customerName},`,
+    '',
+    'Your payment has been received and your Rangilo Raas 2026 admission pass is attached as a PDF.',
+    'Please present the QR code at the venue entrance along with a valid photo ID.',
+    '',
+    `Ticket ID: ${ticket.ticketId}`,
+    `Pass type: ${ticket.tierName}`,
+    `Admission: ${ticket.quantity} pass(es), ${ticket.totalAttendees} attendee(s)`,
+    `Event date: ${eventDate}`,
+    `Venue: ${venue}`,
+    `Entry gate: ${getGateEntry(ticket)}`,
+    `Mobile: ${ticket.customerPhone}`,
+    `Amount paid: INR ${ticket.totalPaid.toLocaleString('en-IN')}`,
+    `Payment reference: ${ticket.paymentId}`,
+    `Order reference: ${ticket.orderId}`,
+    '',
+    `View or print your pass: ${verifyUrl}`,
+    '',
+    'Keep the QR code private. It is required for entry.',
+    'Rangilo Raas 2026 | Maharashtra Mandal, Patna',
+  ].join('\n');
 }
 
 /**
@@ -223,7 +227,7 @@ export async function sendTicketEmail(params: SendTicketEmailParams): Promise<Em
 
   const verifyUrl = `${appUrl}/ticket/${ticket.ticketId}?token=${encodeURIComponent(encryptedToken)}`;
 
-  // Extract base64 without prefix for inline attachment
+  // Attach the QR inline for mail clients and include the complete ticket PDF.
   const base64Qr = qrCodeDataUrl.replace(/^data:image\/\w+;base64,/, '');
 
   const htmlContent = buildTicketEmailHtml({
@@ -233,6 +237,7 @@ export async function sendTicketEmail(params: SendTicketEmailParams): Promise<Em
   });
 
   try {
+    const ticketPdf = await buildTicketPdf(ticket, qrCodeDataUrl);
     const transporter = nodemailer.createTransport({
       service: 'gmail',
       auth: {
@@ -244,16 +249,23 @@ export async function sendTicketEmail(params: SendTicketEmailParams): Promise<Em
     const info = await transporter.sendMail({
       from: `"${senderName}" <${senderEmail}>`,
       to: `"${ticket.customerName}" <${ticket.customerEmail}>`,
-      subject: `Your Confirmed Entry Pass - Rangilo Raas Dandiya Night 2026 [Ticket: ${ticket.ticketId}]`,
-      text: `Namaste ${ticket.customerName}!\n\nYour pass for Rangilo Raas 2026 is confirmed!\nTicket ID: ${ticket.ticketId}\nCategory: ${ticket.tierName}\nPasses: ${ticket.quantity} (${ticket.totalAttendees} attendees)\nVenue: ${ticket.venue || 'Maharashtra Mandal, Patna'}\nDate: ${ticket.eventDate || 'Saturday, 17 October 2026'}\nAmount Paid: INR ${ticket.totalPaid}\n\nView and print your digital pass here: ${verifyUrl}\n\nPlease present this ticket and your ID at the gate.`,
+      subject: `Payment confirmed: Rangilo Raas 2026 ticket ${ticket.ticketId}`,
+      text: buildTicketEmailText(ticket, verifyUrl),
       html: htmlContent,
-      attachments: [{
-        filename: 'ticket-qr.png',
-        content: base64Qr,
-        encoding: 'base64',
-        cid: 'ticketqrcode',
-        contentType: 'image/png',
-      }],
+      attachments: [
+        {
+          filename: `Rangilo-Raas-Ticket-${ticket.ticketId}.pdf`,
+          content: Buffer.from(ticketPdf),
+          contentType: 'application/pdf',
+        },
+        {
+          filename: 'ticket-qr.png',
+          content: base64Qr,
+          encoding: 'base64',
+          cid: 'ticketqrcode',
+          contentType: 'image/png',
+        },
+      ],
     });
 
     return {
